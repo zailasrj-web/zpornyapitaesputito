@@ -90,12 +90,23 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
             const userData = userDoc.exists() ? userDoc.data() : {};
             const username = userData.username || currentUser.displayName || 'User';
             
+            // Get the real photo URL from Firebase Auth
+            const realPhotoURL = currentUser.photoURL || userData.photoURL || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`;
+            
+            // Update user's photoURL in Firestore if it's using ui-avatars but we have a real photo
+            if (currentUser.photoURL && (!userData.photoURL || userData.photoURL.includes('ui-avatars'))) {
+              await updateDoc(doc(db, 'users', currentUser.uid), {
+                photoURL: currentUser.photoURL,
+                avatar: currentUser.photoURL
+              });
+            }
+            
             const newTicket = await addDoc(collection(db, 'supportTickets'), {
               userId: currentUser.uid,
               userEmail: currentUser.email,
               userDisplayName: username,
               username: username,
-              userPhotoURL: currentUser.photoURL || userData.photoURL || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`,
+              userPhotoURL: realPhotoURL,
               assignedAdminId: bannedByAdminId || null,
               status: 'open',
               reason: 'Chat ban appeal',

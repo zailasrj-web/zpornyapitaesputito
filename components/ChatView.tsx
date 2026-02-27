@@ -4,7 +4,8 @@ import { db } from '../firebase';
 import { 
   collection, 
   addDoc, 
-  query, 
+  query,
+  where,
   orderBy, 
   onSnapshot, 
   serverTimestamp,
@@ -878,10 +879,10 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     const usersRef = collection(db, 'users');
     const q = query(usersRef);
     
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
       const banned: {uid: string, displayName: string, email: string, photoURL: string, bannedAt: any, reason: string}[] = [];
       
-      snapshot.forEach((doc) => {
+      for (const doc of snapshot.docs) {
         const data = doc.data();
         if (data.chatBanned === true) {
           console.log('Banned user photoURL from Firestore:', data.photoURL);
@@ -899,8 +900,32 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
             username = 'Unknown User';
           }
           
-          // Get photo URL - use the actual photo if available
+          // Get photo URL - try to get from support ticket if user has ui-avatars
           let photoURL = data.photoURL;
+          
+          if (!photoURL || photoURL === '' || photoURL.includes('ui-avatars')) {
+            // Try to get photo from support ticket
+            try {
+              const ticketsRef = collection(db, 'supportTickets');
+              const ticketQuery = query(ticketsRef, where('userId', '==', doc.id));
+              const ticketSnapshot = await getDocs(ticketQuery);
+              
+              if (!ticketSnapshot.empty) {
+                const ticketData = ticketSnapshot.docs[0].data();
+                if (ticketData.userPhotoURL && !ticketData.userPhotoURL.includes('ui-avatars')) {
+                  photoURL = ticketData.userPhotoURL;
+                  
+                  // Update user's photoURL in Firestore
+                  await updateDoc(doc.ref, {
+                    photoURL: photoURL,
+                    avatar: photoURL
+                  });
+                }
+              }
+            } catch (error) {
+              console.error('Error fetching ticket photo:', error);
+            }
+          }
           
           // Only generate ui-avatars if there's no photo
           if (!photoURL || photoURL === '') {
@@ -916,7 +941,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
             reason: data.chatBanReason || 'No reason provided'
           });
         }
-      });
+      }
       
       setBannedUsers(banned);
     });
