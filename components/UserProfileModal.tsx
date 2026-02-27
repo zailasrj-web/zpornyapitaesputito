@@ -33,6 +33,24 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const [isChatBanned, setIsChatBanned] = useState(false);
   const [isIsolated, setIsIsolated] = useState(false);
 
+  // Modal States
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertModalConfig, setAlertModalConfig] = useState<{
+    title: string;
+    message: string;
+    type?: 'success' | 'error' | 'info';
+  } | null>(null);
+
+  // Helper function for alert modal
+  const showAlert = (config: {
+    title: string;
+    message: string;
+    type?: 'success' | 'error' | 'info';
+  }) => {
+    setAlertModalConfig(config);
+    setShowAlertModal(true);
+  };
+
   // Check if user is banned or isolated
   useEffect(() => {
     const checkUserStatus = async () => {
@@ -55,7 +73,11 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   const handleMuteUser = async () => {
     if (!muteReason.trim()) {
-      alert('Please provide a reason for muting');
+      showAlert({
+        title: 'Razón Requerida',
+        message: 'Por favor proporciona una razón para silenciar al usuario.',
+        type: 'error'
+      });
       return;
     }
 
@@ -88,12 +110,20 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
         mutedAt: serverTimestamp()
       });
 
-      alert(`User muted successfully until ${expiresAt.toLocaleString()}`);
+      showAlert({
+        title: 'Usuario Silenciado',
+        message: `Usuario silenciado exitosamente hasta ${expiresAt.toLocaleString()}`,
+        type: 'success'
+      });
       setShowConfirmModal(false);
       onClose();
     } catch (error) {
       console.error('Error muting user:', error);
-      alert('Failed to mute user');
+      showAlert({
+        title: 'Error',
+        message: 'No se pudo silenciar al usuario. Intenta de nuevo.',
+        type: 'error'
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -101,7 +131,11 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   const handleBanFromChat = async () => {
     if (!muteReason.trim()) {
-      alert('Please provide a reason for banning');
+      showAlert({
+        title: 'Razón Requerida',
+        message: 'Por favor proporciona una razón para banear al usuario.',
+        type: 'error'
+      });
       return;
     }
 
@@ -115,13 +149,21 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
         chatBannedAt: serverTimestamp()
       });
 
-      alert('User banned from chat successfully');
+      showAlert({
+        title: 'Usuario Baneado',
+        message: 'Usuario baneado del chat exitosamente.',
+        type: 'success'
+      });
       setIsChatBanned(true);
       setShowConfirmModal(false);
       onClose();
     } catch (error) {
       console.error('Error banning user:', error);
-      alert('Failed to ban user');
+      showAlert({
+        title: 'Error',
+        message: 'No se pudo banear al usuario. Intenta de nuevo.',
+        type: 'error'
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -137,15 +179,29 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
         chatBannedBy: null,
         chatBannedAt: null,
         chatUnbannedAt: serverTimestamp(),
-        chatUnbannedBy: currentUser.email
+        chatUnbannedBy: currentUser.email,
+        // Add flag to redirect user to community chat
+        redirectToCommunity: true
       });
 
-      alert('User unbanned from chat successfully');
+      showAlert({
+        title: 'Usuario Desbaneado',
+        message: 'El usuario ha sido desbaneado y será redirigido al chat comunitario.',
+        type: 'success'
+      });
       setIsChatBanned(false);
-      onClose();
+      
+      // Close modal after a short delay
+      setTimeout(() => {
+        onClose();
+      }, 1500);
     } catch (error) {
       console.error('Error unbanning user:', error);
-      alert('Failed to unban user');
+      showAlert({
+        title: 'Error',
+        message: 'No se pudo desbanear al usuario. Intenta de nuevo.',
+        type: 'error'
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -153,7 +209,11 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
 
   const handleIsolateUser = async () => {
     if (!muteReason.trim()) {
-      alert('Please provide a reason for isolation');
+      showAlert({
+        title: 'Razón Requerida',
+        message: 'Por favor proporciona una razón para aislar al usuario.',
+        type: 'error'
+      });
       return;
     }
 
@@ -183,7 +243,11 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
         reason: muteReason
       });
 
-      alert('User isolated successfully. Opening isolated chat...');
+      showAlert({
+        title: 'Usuario Aislado',
+        message: 'Usuario aislado exitosamente. Abriendo chat aislado...',
+        type: 'success'
+      });
       setShowConfirmModal(false);
       onClose();
       
@@ -193,7 +257,11 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
       }
     } catch (error) {
       console.error('Error isolating user:', error);
-      alert('Failed to isolate user');
+      showAlert({
+        title: 'Error',
+        message: 'No se pudo aislar al usuario. Intenta de nuevo.',
+        type: 'error'
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -226,11 +294,19 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
         isolatedAt: null
       });
 
-      alert('User isolation removed successfully. Chat history deleted.');
+      showAlert({
+        title: 'Aislamiento Removido',
+        message: 'El aislamiento del usuario ha sido removido exitosamente. El historial del chat ha sido eliminado.',
+        type: 'success'
+      });
       onClose();
     } catch (error) {
       console.error('Error removing isolation:', error);
-      alert('Failed to remove isolation');
+      showAlert({
+        title: 'Error',
+        message: 'No se pudo remover el aislamiento. Intenta de nuevo.',
+        type: 'error'
+      });
     } finally {
       setIsProcessing(false);
     }
@@ -366,6 +442,38 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
           </div>
         </div>
       </div>
+
+      {/* Alert Modal */}
+      {showAlertModal && alertModalConfig && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
+          <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setShowAlertModal(false)}></div>
+          <div className="relative bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] rounded-2xl p-6 max-w-md w-full border border-white/10 shadow-2xl">
+            <div className="flex items-start gap-4 mb-4">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+                alertModalConfig.type === 'success' ? 'bg-green-500/20 text-green-400' :
+                alertModalConfig.type === 'error' ? 'bg-red-500/20 text-red-400' :
+                'bg-blue-500/20 text-blue-400'
+              }`}>
+                <i className={`fa-solid ${
+                  alertModalConfig.type === 'success' ? 'fa-check-circle' :
+                  alertModalConfig.type === 'error' ? 'fa-exclamation-circle' :
+                  'fa-info-circle'
+                } text-2xl`}></i>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-white mb-2">{alertModalConfig.title}</h3>
+                <p className="text-gray-300 text-sm">{alertModalConfig.message}</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setShowAlertModal(false)}
+              className="w-full px-4 py-3 bg-gradient-to-r from-accent to-accent-hover text-white font-bold rounded-xl transition-all hover:shadow-lg"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Confirmation Modal */}
       {showConfirmModal && (

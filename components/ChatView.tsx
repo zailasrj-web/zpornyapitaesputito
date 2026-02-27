@@ -279,6 +279,9 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   const [supportTickets, setSupportTickets] = useState<Contact[]>([]);
   const [showTicketsView, setShowTicketsView] = useState(false); // New state for tickets view
   
+  // Isolated Chats State (for admins)
+  const [isolatedChats, setIsolatedChats] = useState<Contact[]>([]);
+  
   // Modal States
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmModalConfig, setConfirmModalConfig] = useState<{
@@ -589,11 +592,19 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         status: 'Pending'
       });
       
-      alert('Reporte enviado exitosamente');
+      showAlert({
+        title: 'Reporte Enviado',
+        message: 'El reporte ha sido enviado exitosamente al equipo de moderación.',
+        type: 'success'
+      });
       setShowUserProfile(false);
     } catch (error) {
       console.error('Error reporting user:', error);
-      alert('Error al enviar el reporte');
+      showAlert({
+        title: 'Error',
+        message: 'No se pudo enviar el reporte. Intenta de nuevo.',
+        type: 'error'
+      });
     }
   };
 
@@ -697,46 +708,75 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   const handleUnbanUser = async (userId: string) => {
     if (!isAdminOrOwner) return;
     
-    const confirmUnban = confirm('¿Estás seguro de que quieres desbanear a este usuario del chat?');
-    if (!confirmUnban) return;
-    
-    try {
-      const userRef = doc(db, 'users', userId);
-      await updateDoc(userRef, {
-        chatBanned: false,
-        chatBanReason: null,
-        chatBannedAt: null,
-        chatBannedBy: null
-      });
-      
-      // Delete all support tickets from this user
-      const ticketsRef = collection(db, 'supportTickets');
-      const q = query(ticketsRef);
-      const ticketsSnapshot = await getDocs(q);
-      
-      const batch = writeBatch(db);
-      ticketsSnapshot.forEach((ticketDoc) => {
-        const ticketData = ticketDoc.data();
-        if (ticketData.userId === userId) {
-          batch.delete(doc(db, 'supportTickets', ticketDoc.id));
+    showConfirm({
+      title: 'Desbanear Usuario',
+      message: '¿Estás seguro de que quieres desbanear a este usuario del chat? Será redirigido al chat comunitario.',
+      confirmText: 'Desbanear',
+      cancelText: 'Cancelar',
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          const userRef = doc(db, 'users', userId);
+          await updateDoc(userRef, {
+            chatBanned: false,
+            chatBanReason: null,
+            chatBannedAt: null,
+            chatBannedBy: null,
+            redirectToCommunity: true // Flag to redirect user
+          });
+          
+          // Delete all support tickets from this user
+          const ticketsRef = collection(db, 'supportTickets');
+          const q = query(ticketsRef);
+          const ticketsSnapshot = await getDocs(q);
+          
+          const batch = writeBatch(db);
+          ticketsSnapshot.forEach((ticketDoc) => {
+            const ticketData = ticketDoc.data();
+            if (ticketData.userId === userId) {
+              batch.delete(doc(db, 'supportTickets', ticketDoc.id));
+            }
+          });
+          await batch.commit();
+          
+          // Log admin action
+          await addDoc(collection(db, 'adminLogs'), {
+            action: 'CHAT_UNBAN',
+            adminEmail: currentUser?.email,
+            adminUid: currentUser?.uid,
+            targetUserId: userId,
+            timestamp: serverTimestamp()
+          });
+          
+          showAlert({
+            title: 'Usuario Desbaneado',
+            message: 'El usuario ha sido desbaneado del chat y será redirigido al chat comunitario. Sus tickets han sido eliminados.',
+            type: 'success'
+          });
+          
+          // If admin is viewing this user's ticket, redirect admin to community chat
+          if (selectedContact.id.startsWith('ticket_')) {
+            setSelectedContact({ 
+              id: GENERAL_CHAT_ID, 
+              name: "Community Chat", 
+              avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", 
+              status: 'online', 
+              lastMessage: "Welcome everyone!", 
+              time: "Now", 
+              unread: 0 
+            });
+            setShowMobileList(false);
+          }
+        } catch (error) {
+          console.error('Error unbanning user:', error);
+          showAlert({
+            title: 'Error',
+            message: 'No se pudo desbanear al usuario. Intenta de nuevo.',
+            type: 'error'
+          });
         }
-      });
-      await batch.commit();
-      
-      // Log admin action
-      await addDoc(collection(db, 'adminLogs'), {
-        action: 'CHAT_UNBAN',
-        adminEmail: currentUser?.email,
-        adminUid: currentUser?.uid,
-        targetUserId: userId,
-        timestamp: serverTimestamp()
-      });
-      
-      alert('Usuario desbaneado y tickets eliminados');
-    } catch (error) {
-      console.error('Error unbanning user:', error);
-      alert('Error al desbanear usuario');
-    }
+      }
+    });
   };
 
   // Load More Old Messages
@@ -1012,6 +1052,33 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       if (docSnap.exists()) {
         const data = docSnap.data();
         
+        // Check if user was unbanned and should be redirected
+        if (data.redirectToCommunity === true) {
+          // Clear the redirect flag
+          await updateDoc(userRef, {
+            redirectToCommunity: false
+          });
+          
+          // Redirect to community chat
+          setSelectedContact({ 
+            id: GENERAL_CHAT_ID, 
+            name: "Community Chat", 
+            avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", 
+            status: 'online', 
+            lastMessage: "Welcome back!", 
+            time: "Now", 
+            unread: 0 
+          });
+          setShowMobileList(false);
+          
+          // Show welcome back message
+          showAlert({
+            title: '¡Bienvenido de vuelta!',
+            message: 'Has sido desbaneado del chat. Ahora puedes participar nuevamente en la comunidad.',
+            type: 'success'
+          });
+        }
+        
         // Check chat ban
         if (data.chatBanned === true) {
           setIsChatBanned(true);
@@ -1163,6 +1230,44 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       });
       
       setSupportTickets(tickets);
+    });
+
+    return () => unsubscribe();
+  }, [isAdminOrOwner]);
+
+  // Load Isolated Chats (for admins)
+  useEffect(() => {
+    if (!isAdminOrOwner) return;
+
+    const isolatedChatsRef = collection(db, 'isolatedChats');
+    
+    const unsubscribe = onSnapshot(isolatedChatsRef, async (snapshot) => {
+      const chats: Contact[] = [];
+      
+      for (const docSnap of snapshot.docs) {
+        const data = docSnap.data();
+        const chatId = docSnap.id; // e.g., "isolated_userId"
+        const userId = chatId.replace('isolated_', '');
+        
+        // Check if user is still isolated
+        const userRef = doc(db, 'users', userId);
+        const userSnap = await getDoc(userRef);
+        
+        if (userSnap.exists() && userSnap.data().chatIsolated === true) {
+          chats.push({
+            id: chatId,
+            name: data.userName || 'Isolated User',
+            avatar: data.userPhotoURL || `https://ui-avatars.com/api/?name=${data.userName || 'User'}`,
+            status: 'online',
+            lastMessage: 'Isolated chat',
+            time: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Now',
+            unread: 0,
+            isIsolated: true
+          });
+        }
+      }
+      
+      setIsolatedChats(chats);
     });
 
     return () => unsubscribe();
@@ -2397,10 +2502,22 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                           chatBannedAt: null,
                           chatBannedBy: null,
                           chatUnbannedAt: serverTimestamp(),
-                          chatUnbannedBy: currentUser.uid
+                          chatUnbannedBy: currentUser.uid,
+                          redirectToCommunity: true // Flag to redirect user
                       }, { merge: true });
                       
-                      const unbanMsg = `✅ ${targetUserData.displayName} ha sido desbaneado del chat exitosamente`;
+                      // Delete all support tickets from this user
+                      const ticketsRef = collection(db, 'supportTickets');
+                      const ticketsQuery = query(ticketsRef, where('userId', '==', targetUserId));
+                      const ticketsSnapshot = await getDocs(ticketsQuery);
+                      
+                      const batch = writeBatch(db);
+                      ticketsSnapshot.forEach((ticketDoc) => {
+                        batch.delete(doc(db, 'supportTickets', ticketDoc.id));
+                      });
+                      await batch.commit();
+                      
+                      const unbanMsg = `✅ ${targetUserData.displayName} ha sido desbaneado del chat exitosamente y será redirigido al chat comunitario`;
                       await addDoc(collection(db, "chats", chatId, "messages"), {
                           text: unbanMsg,
                           type: 'system',
@@ -2672,7 +2789,11 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   // Upload Cropped Image
   const uploadCroppedImage = async () => {
       if (!imageToCrop) {
-          alert("No hay imagen para subir");
+          showAlert({
+            title: 'Error',
+            message: 'No hay imagen para subir.',
+            type: 'error'
+          });
           return;
       }
       
@@ -2864,7 +2985,11 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           console.error("Stack:", error.stack);
           console.error("Error completo:", error);
           
-          alert(`Error al subir la foto: ${error.message}\n\nRevisa la consola para más detalles.`);
+          showAlert({
+            title: 'Error al Subir Foto',
+            message: `No se pudo subir la foto: ${error.message}. Revisa la consola para más detalles.`,
+            type: 'error'
+          });
       } finally {
           setIsUploading(false);
           console.log("=== FIN DEL PROCESO ===");
@@ -3064,7 +3189,11 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           }
           
           // Add to blocked list logic here
-          alert(`Blocked ${chat.name}`);
+          showAlert({
+            title: 'Usuario Bloqueado',
+            message: `Has bloqueado a ${chat.name}.`,
+            type: 'success'
+          });
       }
   };
 
@@ -3294,6 +3423,38 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                         <p className="text-xs text-gray-400">Official general channel</p>
                     </div>
                 </button>
+
+             {/* Isolated Chats Section (for admins) */}
+             {isAdminOrOwner && isolatedChats.length > 0 && (
+                 <>
+                     <div className="px-4 py-2 bg-[#151515] border-b border-white/5">
+                         <span className="text-xs font-bold text-red-400 uppercase tracking-wider">
+                             <i className="fa-solid fa-user-lock mr-2"></i>
+                             Isolated Chats
+                         </span>
+                     </div>
+                     {isolatedChats.map(chat => (
+                         <button 
+                             key={chat.id}
+                             onClick={() => { setSelectedContact(chat); setShowMobileList(false); }}
+                             className={`w-full flex items-center gap-3 p-4 transition-colors hover:bg-white/5 border-b border-white/5 ${selectedContact.id === chat.id ? 'bg-white/10 border-l-2 border-l-red-500' : ''}`}
+                         >
+                             <div className="relative">
+                                 <img src={chat.avatar} className="w-10 h-10 rounded-full object-cover bg-gray-800" alt={chat.name} />
+                                 <div className="absolute -top-1 -right-1 w-4 h-4 bg-red-600 rounded-full flex items-center justify-center border-2 border-[#0A0A0A]">
+                                     <i className="fa-solid fa-lock text-[8px] text-white"></i>
+                                 </div>
+                             </div>
+                             <div className="flex-1 text-left overflow-hidden">
+                                 <div className="flex items-center mb-0.5">
+                                     <span className="text-sm truncate text-white font-semibold">{chat.name}</span>
+                                 </div>
+                                 <p className="text-xs truncate text-red-400">Isolated - Admin Only</p>
+                             </div>
+                         </button>
+                     ))}
+                 </>
+             )}
 
              {/* Divider between community chat and private chats */}
              {inboxChats.length > 0 && (

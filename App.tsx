@@ -68,6 +68,26 @@ const App: React.FC = () => {
   // Ban State
   const [isGlobalBanned, setIsGlobalBanned] = useState(false);
 
+  // Modal States
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'success';
+  } | null>(null);
+  
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [promptModalConfig, setPromptModalConfig] = useState<{
+    title: string;
+    message: string;
+    placeholder: string;
+    onConfirm: (value: string) => void;
+  } | null>(null);
+  const [promptValue, setPromptValue] = useState('');
+
   const [userTier, setUserTier] = useState<UserTier>('Free');
   const [isTierLoaded, setIsTierLoaded] = useState(false);
   const [isUpgradeBannerDismissed, setIsUpgradeBannerDismissed] = useState(false);
@@ -104,6 +124,34 @@ const App: React.FC = () => {
   };
 
   const user = firebaseUser || mockUser;
+
+  // Helper functions for modals
+  const showConfirm = (config: {
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'success';
+  }) => {
+    setConfirmModalConfig({
+      ...config,
+      confirmText: config.confirmText || 'Confirm',
+      cancelText: config.cancelText || 'Cancel'
+    });
+    setShowConfirmModal(true);
+  };
+
+  const showPrompt = (config: {
+    title: string;
+    message: string;
+    placeholder: string;
+    onConfirm: (value: string) => void;
+  }) => {
+    setPromptModalConfig(config);
+    setPromptValue('');
+    setShowPromptModal(true);
+  };
 
   // Filter handlers
   const handleTagToggle = (tag: string) => {
@@ -689,51 +737,64 @@ const App: React.FC = () => {
   };
 
   const handleDeleteVideo = async (id: string) => {
-    if (confirm('Are you sure you want to delete this video?')) {
-      try {
-        // Delete from Firebase
-        await deleteDoc(doc(db, "posts", id));
-        setToast({ message: 'Video deleted successfully', type: 'success' });
-      } catch (error) {
-        console.error('Error deleting video:', error);
-        // Still remove from local state even if Firebase fails
-        setVideos(prev => prev.filter(v => v.id !== id));
-        setToast({ message: 'Video deleted locally', type: 'info' });
+    showConfirm({
+      title: 'Delete Video',
+      message: 'Are you sure you want to delete this video? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          // Delete from Firebase
+          await deleteDoc(doc(db, "posts", id));
+          setToast({ message: 'Video deleted successfully', type: 'success' });
+        } catch (error) {
+          console.error('Error deleting video:', error);
+          // Still remove from local state even if Firebase fails
+          setVideos(prev => prev.filter(v => v.id !== id));
+          setToast({ message: 'Video deleted locally', type: 'info' });
+        }
       }
-    }
+    });
   };
 
   const handleReportVideo = async (id: string) => {
     if (!user) return openLogin('Login to report content');
     
-    const reason = prompt("Please provide a reason for reporting this video:");
-    if (!reason || reason.trim() === '') {
-      return;
-    }
+    showPrompt({
+      title: 'Report Video',
+      message: 'Please provide a reason for reporting this video:',
+      placeholder: 'Enter reason...',
+      onConfirm: async (reason: string) => {
+        if (!reason || reason.trim() === '') {
+          return;
+        }
 
-    try {
-      // Find the video to get details
-      const video = videos.find(v => v.id === id);
-      
-      await addDoc(collection(db, "reports"), {
-        type: 'Video',
-        content: video?.name || 'Video content',
-        videoId: id,
-        reason: reason.trim(),
-        reporter: user.email || user.uid,
-        reporterId: user.uid,
-        reportedUser: video?.authorName || video?.creator || 'Unknown',
-        reportedUserId: video?.authorId,
-        reportedUserEmail: video?.authorHandle || 'Unknown',
-        status: 'Pending',
-        createdAt: serverTimestamp()
-      });
-      
-      setToast({ message: 'Report submitted successfully', type: 'success' });
-    } catch (error) {
-      console.error("Error submitting report:", error);
-      setToast({ message: 'Failed to submit report', type: 'error' });
-    }
+        try {
+          // Find the video to get details
+          const video = videos.find(v => v.id === id);
+          
+          await addDoc(collection(db, "reports"), {
+            type: 'Video',
+            content: video?.name || 'Video content',
+            videoId: id,
+            reason: reason.trim(),
+            reporter: user.email || user.uid,
+            reporterId: user.uid,
+            reportedUser: video?.authorName || video?.creator || 'Unknown',
+            reportedUserId: video?.authorId,
+            reportedUserEmail: video?.authorHandle || 'Unknown',
+            status: 'Pending',
+            createdAt: serverTimestamp()
+          });
+          
+          setToast({ message: 'Report submitted successfully', type: 'success' });
+        } catch (error) {
+          console.error("Error submitting report:", error);
+          setToast({ message: 'Failed to submit report', type: 'error' });
+        }
+      }
+    });
   };
 
   const handleCopyLink = (id: string) => {
@@ -1392,6 +1453,92 @@ const App: React.FC = () => {
       {/* Sticky Mobile Ad */}
       {shouldShowAds(userTier, isAdmin) && (
         <StickyMobileAd zoneId={AD_CONFIG.ZONES.TOP_BANNER_MOBILE} />
+      )}
+
+      {/* Confirm Modal */}
+      {showConfirmModal && confirmModalConfig && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
+          <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setShowConfirmModal(false)}></div>
+          <div className="relative bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] rounded-2xl p-6 max-w-md w-full border border-white/10 shadow-2xl animate-[slideUp_0.3s_ease-out]">
+            <div className="flex items-start gap-4 mb-6">
+              <div className={`w-12 h-12 rounded-full flex items-center justify-center flex-shrink-0 ${
+                confirmModalConfig.type === 'danger' ? 'bg-red-500/20 text-red-400' :
+                confirmModalConfig.type === 'warning' ? 'bg-yellow-500/20 text-yellow-400' :
+                'bg-green-500/20 text-green-400'
+              }`}>
+                <i className={`fa-solid ${
+                  confirmModalConfig.type === 'danger' ? 'fa-exclamation-triangle' :
+                  confirmModalConfig.type === 'warning' ? 'fa-exclamation-circle' :
+                  'fa-check-circle'
+                } text-2xl`}></i>
+              </div>
+              <div className="flex-1">
+                <h3 className="text-xl font-bold text-white mb-2">{confirmModalConfig.title}</h3>
+                <p className="text-gray-300 text-sm">{confirmModalConfig.message}</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10"
+              >
+                {confirmModalConfig.cancelText}
+              </button>
+              <button
+                onClick={() => {
+                  confirmModalConfig.onConfirm();
+                  setShowConfirmModal(false);
+                }}
+                className={`flex-1 px-4 py-3 font-bold rounded-xl transition-all ${
+                  confirmModalConfig.type === 'danger' 
+                    ? 'bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white'
+                    : 'bg-gradient-to-r from-accent to-accent-hover text-white'
+                }`}
+              >
+                {confirmModalConfig.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Prompt Modal */}
+      {showPromptModal && promptModalConfig && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 animate-[fadeIn_0.2s_ease-out]">
+          <div className="absolute inset-0 bg-black/90 backdrop-blur-sm" onClick={() => setShowPromptModal(false)}></div>
+          <div className="relative bg-gradient-to-br from-[#1a1a1a] to-[#0a0a0a] rounded-2xl p-6 max-w-md w-full border border-white/10 shadow-2xl animate-[slideUp_0.3s_ease-out]">
+            <h3 className="text-xl font-bold text-white mb-2">{promptModalConfig.title}</h3>
+            <p className="text-gray-300 text-sm mb-4">{promptModalConfig.message}</p>
+            <textarea
+              value={promptValue}
+              onChange={(e) => setPromptValue(e.target.value)}
+              placeholder={promptModalConfig.placeholder}
+              className="w-full px-4 py-3 bg-white/5 border border-white/10 rounded-xl text-white placeholder-gray-500 mb-4 resize-none focus:outline-none focus:border-accent transition-colors"
+              rows={3}
+              autoFocus
+            />
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowPromptModal(false)}
+                className="flex-1 px-4 py-3 bg-white/5 hover:bg-white/10 text-white font-bold rounded-xl transition-all border border-white/10"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  if (promptValue.trim()) {
+                    promptModalConfig.onConfirm(promptValue);
+                    setShowPromptModal(false);
+                  }
+                }}
+                disabled={!promptValue.trim()}
+                className="flex-1 px-4 py-3 bg-gradient-to-r from-accent to-accent-hover text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Submit
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
