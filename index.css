@@ -1,0 +1,102 @@
+/* Custom animations */
+.animate-spin-slow {
+  animation: spin 5s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Force ExoClick Native Ads to display horizontally */
+.ad-container {
+  min-height: 140px !important;
+  max-height: 140px !important;
+  height: 140px !important;
+  width: 100% !important;
+  max-width: 480px !important;
+}
+
+/* Override ExoClick's inline styles */
+.ad-container > div {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.ad-container .eKPCQHFW,
+.ad-container .trC9TAyZ,
+.ad-container [data-uid] {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 140px !important;
+}
+
+.exo-native-widget {
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 140px !important;
+  min-height: 140px !important;
+  max-height: 140px !important;
+}
+
+.exo-native-widget .exo-native-widget-outer-container {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: nowrap !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  overflow: visible !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: 140px !important;
+  max-height: 140px !important;
+}
+
+.exo-native-widget .exo-native-widget-item-container {
+  flex-basis: auto !important;
+  flex-shrink: 0 !important;
+  width: 155px !important;
+  max-width: 155px !important;
+  height: 140px !important;
+  max-height: 140px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.exo-native-widget .exo-native-widget-item-image-wrapper {
+  width: 155px !important;
+  height: 140px !important;
+  max-height: 140px !important;
+}
+
+/* Hide the 4th item to show only 3 ads horizontally */
+.exo-native-widget .exo-native-widget-item-container:nth-child(n+4) {
+  display: none !important;
+}
+
+/* Ensure first 3 ads are displayed */
+.exo-native-widget .exo-native-widget-item-container:nth-child(1),
+.exo-native-widget .exo-native-widget-item-container:nth-child(2),
+.exo-native-widget .exo-native-widget-item-container:nth-child(3) {
+  display: block !important;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+  .ad-container {
+    max-width: 100% !important;
+  }
+  
+  .exo-native-widget .exo-native-widget-item-container {
+    width: 115px !important;
+    max-width: 115px !important;
+  }
+  
+  .exo-native-widget .exo-native-widget-item-image-wrapper {
+    width: 115px !important;
+  }
+}

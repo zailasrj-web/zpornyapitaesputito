@@ -1,0 +1,208 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isSignedIn() && 
+             (request.auth.token.email == 'zailasrj@gmail.com' || 
+              request.auth.token.email in get(/databases/$(database)/documents/platformSettings/admins).data.emails);
+    }
+    
+    // Helper function to check if user is owner
+    function isOwner() {
+      return isSignedIn() && request.auth.token.email == 'zailasrj@gmail.com';
+    }
+    
+    // Users collection
+    match /users/{userId} {
+      // Anyone can read user profiles
+      allow read: if true;
+      
+      // Users can create their own profile
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      
+      // Users can update their own profile, admins can update any profile
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      
+      // Only admins can delete users
+      allow delete: if isAdmin();
+      
+      // Active chats subcollection (inbox)
+      match /active_chats/{chatId} {
+        // Users can read their own active chats
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        
+        // Users can write to their own active chats
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+      
+      // Favorites subcollection
+      match /favorites/{videoId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+      
+      // Watch history subcollection
+      match /watchHistory/{videoId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+    
+    // Chats collection
+    match /chats/{chatId} {
+      // Anyone can read community chat
+      allow read: if chatId == 'general_community_chat';
+      
+      // For private chats, only participants can read
+      allow read: if isSignedIn() && 
+                     (request.auth.uid in chatId.split('_'));
+      
+      // Anyone authenticated can write to community chat
+      allow write: if isSignedIn() && chatId == 'general_community_chat';
+      
+      // For private chats, only participants can write
+      allow write: if isSignedIn() && 
+                      (request.auth.uid in chatId.split('_'));
+      
+      // Messages subcollection
+      match /messages/{messageId} {
+        // Same rules as parent chat
+        allow read: if chatId == 'general_community_chat' || 
+                       (isSignedIn() && request.auth.uid in chatId.split('_'));
+        
+        allow create: if isSignedIn() && 
+                         (chatId == 'general_community_chat' || 
+                          request.auth.uid in chatId.split('_'));
+        
+        // Users can update/delete their own messages, admins can update/delete any
+        allow update, delete: if isSignedIn() && 
+                                 (request.auth.uid == resource.data.senderUid || isAdmin());
+      }
+      
+      // Typing indicators subcollection
+      match /typing/{userId} {
+        allow read: if true;
+        allow write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+    
+    // Isolated chats collection (admin-only chats)
+    match /isolatedChats/{chatId} {
+      // Only the isolated user and admins can read
+      allow read: if isSignedIn() && 
+                     (request.auth.uid == chatId.replace('isolated_', '') || isAdmin());
+      
+      // Only admins can create isolated chats
+      allow create: if isAdmin();
+      
+      // Only admins can update/delete
+      allow update, delete: if isAdmin();
+      
+      // Messages in isolated chats
+      match /messages/{messageId} {
+        // Only the isolated user and admins can read
+        allow read: if isSignedIn() && 
+                       (request.auth.uid == chatId.replace('isolated_', '') || isAdmin());
+        
+        // Only the isolated user and admins can write
+        allow create: if isSignedIn() && 
+                         (request.auth.uid == chatId.replace('isolated_', '') || isAdmin());
+        
+        allow update, delete: if isAdmin();
+      }
+    }
+    
+    // Posts collection (videos)
+    match /posts/{postId} {
+      // Anyone can read posts
+      allow read: if true;
+      
+      // Authenticated users can create posts
+      allow create: if isSignedIn();
+      
+      // Users can update their own posts, admins can update any
+      allow update: if isSignedIn() && 
+                       (request.auth.uid == resource.data.userId || isAdmin());
+      
+      // Users can delete their own posts, admins can delete any
+      allow delete: if isSignedIn() && 
+                       (request.auth.uid == resource.data.userId || isAdmin());
+    }
+    
+    // Reports collection
+    match /reports/{reportId} {
+      // Only admins can read reports
+      allow read: if isAdmin();
+      
+      // Authenticated users can create reports
+      allow create: if isSignedIn();
+      
+      // Only admins can update/delete reports
+      allow update, delete: if isAdmin();
+    }
+    
+    // Notifications collection
+    match /notifications/{notificationId} {
+      // Users can read their own notifications
+      allow read: if isSignedIn() && request.auth.uid == resource.data.toUserId;
+      
+      // Anyone can create notifications
+      allow create: if isSignedIn();
+      
+      // Users can update their own notifications (mark as read)
+      allow update: if isSignedIn() && request.auth.uid == resource.data.toUserId;
+      
+      // Users can delete their own notifications
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.toUserId;
+    }
+    
+    // Follows collection
+    match /follows/{followId} {
+      // Anyone can read follows
+      allow read: if true;
+      
+      // Authenticated users can create follows
+      allow create: if isSignedIn();
+      
+      // Users can delete their own follows
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.followerId;
+    }
+    
+    // Platform settings (admins list, etc.)
+    match /platformSettings/{settingId} {
+      // Anyone can read platform settings
+      allow read: if true;
+      
+      // Only owner can write platform settings
+      allow write: if isOwner();
+    }
+    
+    // Banned IPs collection
+    match /bannedIPs/{ip} {
+      // Only admins can read banned IPs
+      allow read: if isAdmin();
+      
+      // Only admins can write banned IPs
+      allow write: if isAdmin();
+    }
+    
+    // User interactions (for recommendations)
+    match /userInteractions/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // User preferences (for recommendations)
+    match /userPreferences/{userId} {
+      allow read: if isSignedIn() && request.auth.uid == userId;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+  }
+}

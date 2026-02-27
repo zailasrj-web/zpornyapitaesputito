@@ -1,0 +1,7 @@
+google.com, pub-4937273083832549, DIRECT, f08c47fec0942fa0
+
+# ExoClick Ads.txt
+# Add your ExoClick Publisher ID after approval
+# Format: exoclick.com, YOUR_PUBLISHER_ID, DIRECT
+# Example: exoclick.com, 123456, DIRECT
+exoclick.com, YOUR_PUBLISHER_ID_HERE, DIRECT
