@@ -969,7 +969,9 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           userDisplayName: data.userDisplayName,
           username: data.username,
           userPhotoURL: data.userPhotoURL,
-          fullData: data
+          userId: data.userId,
+          userEmail: data.userEmail,
+          allFields: Object.keys(data)
         });
         
         tickets.push({
@@ -1293,7 +1295,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     }
 
     // Use different orderBy field for support tickets
-    const orderByField = selectedContact.isSupportTicket ? "timestamp" : "createdAt";
+    // Try 'timestamp' first (new format), fallback to 'createdAt' (old format)
+    const orderByField = selectedContact.isSupportTicket ? "createdAt" : "createdAt";
     const q = query(collectionRef, orderBy(orderByField, "desc"), limit(messageLimit));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
@@ -1332,17 +1335,22 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         // Adapt support ticket message format to chat message format
         let message: any;
         if (selectedContact.isSupportTicket) {
+          // Support tickets can have either 'timestamp' (new) or 'createdAt' (old)
+          const messageTime = data.timestamp || data.createdAt;
+          
           message = {
             id: docSnapshot.id,
             text: data.text,
             senderUid: data.senderId || data.senderUid,
-            displayName: data.senderName || data.displayName,
+            displayName: data.senderName || data.displayName || 'User',
             photoURL: data.senderAvatar || data.photoURL || '',
-            createdAt: data.timestamp || data.createdAt,
+            createdAt: messageTime,
             email: data.email || '',
             read: data.read || false,
             type: data.isAdmin ? 'admin_log' : 'text'
           };
+          
+          console.log('✅ Adapted message:', message);
         } else {
           message = { id: docSnapshot.id, ...data };
         }
@@ -2341,18 +2349,17 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         photoURL: currentUser.photoURL || `https://ui-avatars.com/api/?name=${currentUser.email}`,
         email: currentUser.email,
         read: false,
-        type: 'text'
+        type: 'text',
+        createdAt: serverTimestamp()
       };
       
-      // Use 'timestamp' for support tickets, 'createdAt' for regular chats
+      // Add extra fields for support tickets
       if (selectedContact.id.startsWith('ticket_')) {
-        msgData.timestamp = serverTimestamp();
         msgData.senderId = currentUser.uid;
         msgData.senderName = currentUser.displayName || "Admin";
         msgData.senderAvatar = currentUser.photoURL || '';
         msgData.isAdmin = true;
-      } else {
-        msgData.createdAt = serverTimestamp();
+        msgData.timestamp = serverTimestamp(); // Keep both for compatibility
       }
 
       // Add reply data if replying to a message
