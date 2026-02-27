@@ -279,6 +279,24 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   const [supportTickets, setSupportTickets] = useState<Contact[]>([]);
   const [showTicketsView, setShowTicketsView] = useState(false); // New state for tickets view
   
+  // Modal States
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalConfig, setConfirmModalConfig] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    cancelText: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'success';
+  } | null>(null);
+  
+  const [showAlertModal, setShowAlertModal] = useState(false);
+  const [alertModalConfig, setAlertModalConfig] = useState<{
+    title: string;
+    message: string;
+    type?: 'success' | 'error' | 'info';
+  } | null>(null);
+  
   // Active Chats List (Inbox)
   const [inboxChats, setInboxChats] = useState<Contact[]>([]);
   
@@ -378,6 +396,32 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   
   const isAdminOrOwner = currentUser ? (ADMIN_EMAILS.includes(currentUser.email || '') || currentUser.email === OWNER_EMAIL) : false;
   const isOwner = currentUser?.email === OWNER_EMAIL;
+
+  // Helper functions for modals
+  const showConfirm = (config: {
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+    type?: 'danger' | 'warning' | 'success';
+  }) => {
+    setConfirmModalConfig({
+      ...config,
+      confirmText: config.confirmText || 'Confirmar',
+      cancelText: config.cancelText || 'Cancelar'
+    });
+    setShowConfirmModal(true);
+  };
+
+  const showAlert = (config: {
+    title: string;
+    message: string;
+    type?: 'success' | 'error' | 'info';
+  }) => {
+    setAlertModalConfig(config);
+    setShowAlertModal(true);
+  };
 
   // Function to render text with highlighted mentions
   const renderTextWithMentions = (text: string) => {
@@ -2533,8 +2577,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
 
       const displayMessage = content.imageUrl ? "Sent an image 📷" : content.text;
 
-      // Don't update inbox for support tickets
-      if (selectedContact.id !== GENERAL_CHAT_ID && !selectedContact.id.startsWith('ticket_')) {
+      // Don't update inbox for support tickets or isolated chats
+      if (selectedContact.id !== GENERAL_CHAT_ID && !selectedContact.id.startsWith('ticket_') && !selectedContact.id.startsWith('isolated_')) {
           const myInboxRef = doc(db, "users", currentUser.uid, "active_chats", chatId);
           await setDoc(myInboxRef, {
               partnerId: selectedContact.id,
@@ -3423,34 +3467,72 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                  {selectedContact.isIsolated && isAdminOrOwner && (
                      <button 
                          onClick={async () => {
-                             if (!confirm('¿Terminar el aislamiento de este usuario?')) return;
-                             
-                             try {
-                                 const userId = selectedContact.id.replace('isolated_', '');
-                                 const userRef = doc(db, 'users', userId);
-                                 await updateDoc(userRef, {
-                                     chatIsolated: false,
-                                     isolationReason: null,
-                                     isolatedBy: null,
-                                     isolatedAt: null
-                                 });
-                                 
-                                 alert('Aislamiento terminado');
-                                 
-                                 // Return to community chat
-                                 setSelectedContact({ 
-                                     id: GENERAL_CHAT_ID, 
-                                     name: "Community Chat", 
-                                     avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", 
-                                     status: 'online', 
-                                     lastMessage: "Welcome", 
-                                     time: "Now", 
-                                     unread: 0 
-                                 });
-                             } catch (error) {
-                                 console.error('Error ending isolation:', error);
-                                 alert('Error al terminar el aislamiento');
-                             }
+                             showConfirm({
+                                 title: '¿Terminar Aislamiento?',
+                                 message: 'El usuario podrá volver a acceder al chat comunitario. El historial del chat aislado será eliminado.',
+                                 confirmText: 'Terminar Aislamiento',
+                                 cancelText: 'Cancelar',
+                                 type: 'success',
+                                 onConfirm: async () => {
+                                     try {
+                                         const userId = selectedContact.id.replace('isolated_', '');
+                                         const chatId = `isolated_${userId}`;
+                                         
+                                         // Delete all messages in the isolated chat
+                                         const messagesRef = collection(db, 'isolatedChats', chatId, 'messages');
+                                         const messagesSnapshot = await getDocs(messagesRef);
+                                         
+                                         const batch = writeBatch(db);
+                                         messagesSnapshot.forEach((msgDoc) => {
+                                             batch.delete(doc(db, 'isolatedChats', chatId, 'messages', msgDoc.id));
+                                         });
+                                         await batch.commit();
+                                         
+                                         // Delete the isolated chat document
+                                         await deleteDoc(doc(db, 'isolatedChats', chatId));
+                                         
+                                         // Remove any inbox references (just in case)
+                                         try {
+                                             await deleteDoc(doc(db, 'users', currentUser.uid, 'active_chats', selectedContact.id));
+                                         } catch (e) {
+                                             // Ignore if doesn't exist
+                                         }
+                                         
+                                         // Remove isolation from user
+                                         const userRef = doc(db, 'users', userId);
+                                         await updateDoc(userRef, {
+                                             chatIsolated: false,
+                                             isolationReason: null,
+                                             isolatedBy: null,
+                                             isolatedAt: null
+                                         });
+                                         
+                                         showAlert({
+                                             title: 'Aislamiento Terminado',
+                                             message: 'El usuario ya puede acceder al chat normalmente. El historial del chat aislado ha sido eliminado.',
+                                             type: 'success'
+                                         });
+                                         
+                                         // Return to community chat
+                                         setSelectedContact({ 
+                                             id: GENERAL_CHAT_ID, 
+                                             name: "Community Chat", 
+                                             avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", 
+                                             status: 'online', 
+                                             lastMessage: "Welcome", 
+                                             time: "Now", 
+                                             unread: 0 
+                                         });
+                                     } catch (error) {
+                                         console.error('Error ending isolation:', error);
+                                         showAlert({
+                                             title: 'Error',
+                                             message: 'No se pudo terminar el aislamiento. Intenta de nuevo.',
+                                             type: 'error'
+                                         });
+                                     }
+                                 }
+                             });
                          }}
                          className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
                      >
@@ -3462,34 +3544,49 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                  {selectedContact.isSupportTicket && isAdminOrOwner && (
                      <button 
                          onClick={async () => {
-                             if (!confirm('¿Cerrar este ticket? Esto eliminará todo el historial de mensajes.')) return;
-                             
-                             try {
-                                 const ticketId = selectedContact.id.replace('ticket_', '');
-                                 
-                                 // Delete all messages in the ticket
-                                 const messagesRef = collection(db, 'supportTickets', ticketId, 'messages');
-                                 const messagesSnapshot = await getDocs(messagesRef);
-                                 
-                                 const batch = writeBatch(db);
-                                 messagesSnapshot.forEach((msgDoc) => {
-                                     batch.delete(doc(db, 'supportTickets', ticketId, 'messages', msgDoc.id));
-                                 });
-                                 await batch.commit();
-                                 
-                                 // Update ticket status to closed
-                                 const ticketRef = doc(db, 'supportTickets', ticketId);
-                                 await updateDoc(ticketRef, {
-                                     status: 'closed',
-                                     closedAt: serverTimestamp(),
-                                     closedBy: currentUser?.email
-                                 });
-                                 
-                                 alert('Ticket cerrado y historial eliminado');
-                             } catch (error) {
-                                 console.error('Error closing ticket:', error);
-                                 alert('Error al cerrar el ticket');
-                             }
+                             showConfirm({
+                                 title: '¿Cerrar Ticket?',
+                                 message: 'Esto eliminará todo el historial de mensajes del ticket. Esta acción no se puede deshacer.',
+                                 confirmText: 'Cerrar Ticket',
+                                 cancelText: 'Cancelar',
+                                 type: 'danger',
+                                 onConfirm: async () => {
+                                     try {
+                                         const ticketId = selectedContact.id.replace('ticket_', '');
+                                         
+                                         // Delete all messages in the ticket
+                                         const messagesRef = collection(db, 'supportTickets', ticketId, 'messages');
+                                         const messagesSnapshot = await getDocs(messagesRef);
+                                         
+                                         const batch = writeBatch(db);
+                                         messagesSnapshot.forEach((msgDoc) => {
+                                             batch.delete(doc(db, 'supportTickets', ticketId, 'messages', msgDoc.id));
+                                         });
+                                         await batch.commit();
+                                         
+                                         // Update ticket status to closed
+                                         const ticketRef = doc(db, 'supportTickets', ticketId);
+                                         await updateDoc(ticketRef, {
+                                             status: 'closed',
+                                             closedAt: serverTimestamp(),
+                                             closedBy: currentUser?.email
+                                         });
+                                         
+                                         showAlert({
+                                             title: 'Ticket Cerrado',
+                                             message: 'El ticket ha sido cerrado y el historial eliminado.',
+                                             type: 'success'
+                                         });
+                                     } catch (error) {
+                                         console.error('Error closing ticket:', error);
+                                         showAlert({
+                                             title: 'Error',
+                                             message: 'No se pudo cerrar el ticket. Intenta de nuevo.',
+                                             type: 'error'
+                                         });
+                                     }
+                                 }
+                             });
                          }}
                          className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
                      >
@@ -4697,6 +4794,95 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           onStartChat={handleStartChatFromProfile}
           onReport={handleReportFromProfile}
         />
+      )}
+
+      {/* Confirm Modal */}
+      {showConfirmModal && confirmModalConfig && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 font-sans">
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity animate-[fadeIn_0.2s_ease-out]"
+            onClick={() => setShowConfirmModal(false)}
+          />
+          <div className="relative bg-[#151515] border border-white/10 rounded-2xl p-6 shadow-2xl max-w-md w-full text-center animate-[scaleIn_0.1s_ease-out] z-10">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 border-2 ${
+              confirmModalConfig.type === 'danger' 
+                ? 'bg-red-500/10 border-red-500/20 text-red-500' 
+                : confirmModalConfig.type === 'success'
+                  ? 'bg-green-500/10 border-green-500/20 text-green-500'
+                  : 'bg-yellow-500/10 border-yellow-500/20 text-yellow-500'
+            }`}>
+              <i className={`fa-solid ${
+                confirmModalConfig.type === 'danger' 
+                  ? 'fa-triangle-exclamation' 
+                  : confirmModalConfig.type === 'success'
+                    ? 'fa-check'
+                    : 'fa-question'
+              } text-lg`}></i>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">{confirmModalConfig.title}</h3>
+            <p className="text-gray-400 text-sm mb-6 leading-relaxed">{confirmModalConfig.message}</p>
+            
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowConfirmModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-white font-semibold text-sm transition-colors border border-white/5"
+              >
+                {confirmModalConfig.cancelText}
+              </button>
+              <button 
+                onClick={() => {
+                  confirmModalConfig.onConfirm();
+                  setShowConfirmModal(false);
+                }}
+                className={`flex-1 py-2.5 rounded-xl font-semibold text-sm transition-colors shadow-lg ${
+                  confirmModalConfig.type === 'danger'
+                    ? 'bg-red-600 hover:bg-red-700 text-white shadow-red-900/20'
+                    : confirmModalConfig.type === 'success'
+                      ? 'bg-green-600 hover:bg-green-700 text-white shadow-green-900/20'
+                      : 'bg-yellow-600 hover:bg-yellow-700 text-white shadow-yellow-900/20'
+                }`}
+              >
+                {confirmModalConfig.confirmText}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Alert Modal */}
+      {showAlertModal && alertModalConfig && (
+        <div className="fixed inset-0 z-[500] flex items-center justify-center p-4 font-sans">
+          <div 
+            className="absolute inset-0 bg-black/80 backdrop-blur-sm transition-opacity animate-[fadeIn_0.2s_ease-out]"
+            onClick={() => setShowAlertModal(false)}
+          />
+          <div className="relative bg-[#151515] border border-white/10 rounded-2xl p-6 shadow-2xl max-w-md w-full text-center animate-[scaleIn_0.1s_ease-out] z-10">
+            <div className={`w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-4 border-2 ${
+              alertModalConfig.type === 'error' 
+                ? 'bg-red-500/10 border-red-500/20 text-red-500' 
+                : alertModalConfig.type === 'success'
+                  ? 'bg-green-500/10 border-green-500/20 text-green-500'
+                  : 'bg-blue-500/10 border-blue-500/20 text-blue-500'
+            }`}>
+              <i className={`fa-solid ${
+                alertModalConfig.type === 'error' 
+                  ? 'fa-circle-xmark' 
+                  : alertModalConfig.type === 'success'
+                    ? 'fa-circle-check'
+                    : 'fa-circle-info'
+              } text-lg`}></i>
+            </div>
+            <h3 className="text-lg font-bold text-white mb-2">{alertModalConfig.title}</h3>
+            <p className="text-gray-400 text-sm mb-6 leading-relaxed">{alertModalConfig.message}</p>
+            
+            <button 
+              onClick={() => setShowAlertModal(false)}
+              className="w-full py-2.5 rounded-xl bg-accent hover:bg-accent-hover text-white font-semibold text-sm transition-colors"
+            >
+              Entendido
+            </button>
+          </div>
+        </div>
       )}
 
     </div>

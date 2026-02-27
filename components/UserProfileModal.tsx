@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User } from 'firebase/auth';
 import { db } from '../firebase';
-import { doc, setDoc, serverTimestamp, updateDoc, getDoc } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, updateDoc, getDoc, collection, getDocs, writeBatch, deleteDoc } from 'firebase/firestore';
 
 interface UserProfileModalProps {
   user: {
@@ -202,6 +202,22 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
   const handleRemoveIsolation = async () => {
     setIsProcessing(true);
     try {
+      const chatId = `isolated_${user.uid}`;
+      
+      // Delete all messages in the isolated chat
+      const messagesRef = collection(db, 'isolatedChats', chatId, 'messages');
+      const messagesSnapshot = await getDocs(messagesRef);
+      
+      const batch = writeBatch(db);
+      messagesSnapshot.forEach((msgDoc) => {
+        batch.delete(doc(db, 'isolatedChats', chatId, 'messages', msgDoc.id));
+      });
+      await batch.commit();
+      
+      // Delete the isolated chat document
+      await deleteDoc(doc(db, 'isolatedChats', chatId));
+      
+      // Remove isolation from user
       const userRef = doc(db, 'users', user.uid);
       await updateDoc(userRef, {
         chatIsolated: false,
@@ -210,7 +226,7 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
         isolatedAt: null
       });
 
-      alert('User isolation removed successfully');
+      alert('User isolation removed successfully. Chat history deleted.');
       onClose();
     } catch (error) {
       console.error('Error removing isolation:', error);
@@ -322,27 +338,26 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
                     </button>
                   )}
 
-                  {/* Isolate User */}
-                  <button
-                    onClick={() => {
-                      setConfirmAction('isolate');
-                      setShowConfirmModal(true);
-                    }}
-                    className="w-full px-4 py-3 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 font-bold rounded-xl transition-all border border-purple-600/30 hover:border-purple-600/50 flex items-center justify-center gap-2 mb-2"
-                  >
-                    <i className="fa-solid fa-user-lock"></i>
-                    Isolate User (Admin-Only Chat)
-                  </button>
-
-                  {/* Remove Isolation */}
-                  {isIsolated && (
+                  {/* Isolate/Remove Isolation User */}
+                  {isIsolated ? (
                     <button
                       onClick={handleRemoveIsolation}
                       disabled={isProcessing}
-                      className="w-full px-4 py-3 bg-green-600/20 hover:bg-green-600/30 text-green-400 font-bold rounded-xl transition-all border border-green-600/30 hover:border-green-600/50 flex items-center justify-center gap-2 disabled:opacity-50"
+                      className="w-full px-4 py-3 bg-green-600/20 hover:bg-green-600/30 text-green-400 font-bold rounded-xl transition-all border border-green-600/30 hover:border-green-600/50 flex items-center justify-center gap-2 mb-2 disabled:opacity-50"
                     >
                       <i className="fa-solid fa-unlock"></i>
                       {isProcessing ? 'Processing...' : 'Remove Isolation'}
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        setConfirmAction('isolate');
+                        setShowConfirmModal(true);
+                      }}
+                      className="w-full px-4 py-3 bg-purple-600/20 hover:bg-purple-600/30 text-purple-400 font-bold rounded-xl transition-all border border-purple-600/30 hover:border-purple-600/50 flex items-center justify-center gap-2 mb-2"
+                    >
+                      <i className="fa-solid fa-user-lock"></i>
+                      Isolate User (Admin-Only Chat)
                     </button>
                   )}
                 </div>
