@@ -884,6 +884,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       snapshot.forEach((doc) => {
         const data = doc.data();
         if (data.chatBanned === true) {
+          console.log('Banned user photoURL from Firestore:', data.photoURL);
+          
           // Try to get username in order of priority
           let username = data.username || data.displayName;
           
@@ -1252,7 +1254,9 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         setDoc(myInboxRef, { unread: 0 }, { merge: true }).catch(e => console.log("Error marking inbox read", e));
     }
 
-    const q = query(collectionRef, orderBy("createdAt", "desc"), limit(messageLimit));
+    // Use different orderBy field for support tickets
+    const orderByField = selectedContact.isSupportTicket ? "timestamp" : "createdAt";
+    const q = query(collectionRef, orderBy(orderByField, "desc"), limit(messageLimit));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
       const msgs: Message[] = [];
@@ -1275,7 +1279,25 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           }
         }
         
-        msgs.push({ id: docSnapshot.id, ...data } as Message);
+        // Adapt support ticket message format to chat message format
+        let message: any;
+        if (selectedContact.isSupportTicket) {
+          message = {
+            id: docSnapshot.id,
+            text: data.text,
+            senderUid: data.senderId || data.senderUid,
+            displayName: data.senderName || data.displayName,
+            photoURL: data.senderAvatar || data.photoURL || '',
+            createdAt: data.timestamp || data.createdAt,
+            email: data.email || '',
+            read: data.read || false,
+            type: data.isAdmin ? 'admin_log' : 'text'
+          };
+        } else {
+          message = { id: docSnapshot.id, ...data };
+        }
+        
+        msgs.push(message as Message);
 
         if (selectedContact.id !== GENERAL_CHAT_ID && data.senderUid !== currentUser.uid && !data.read) {
             updateDoc(docSnapshot.ref, { read: true }).catch(err => console.log("Error marking msg read", err));
