@@ -990,9 +990,24 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         orderBy("timestamp", "desc")
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-        const chats: Contact[] = snapshot.docs.map(doc => {
-            const data = doc.data();
+    const unsubscribe = onSnapshot(q, async (snapshot) => {
+        const chats: Contact[] = [];
+        
+        for (const docSnap of snapshot.docs) {
+            const data = docSnap.data();
+            const partnerId = data.partnerId;
+            
+            // Skip if this is an isolated chat (check if partner is isolated)
+            if (isAdminOrOwner) {
+                const partnerRef = doc(db, 'users', partnerId);
+                const partnerSnap = await getDoc(partnerRef);
+                
+                if (partnerSnap.exists() && partnerSnap.data().chatIsolated === true) {
+                    // Skip this chat, it will appear in isolatedChats instead
+                    continue;
+                }
+            }
+            
             let timeDisplay = "Now";
             if (data.timestamp) {
                 const date = data.timestamp.toDate();
@@ -1004,16 +1019,16 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                 else timeDisplay = `${Math.floor(diff/86400)}d`;
             }
 
-            return {
-                id: data.partnerId,
+            chats.push({
+                id: partnerId,
                 name: data.partnerName || "User",
                 avatar: data.partnerAvatar || "https://ui-avatars.com/api/?name=User",
                 status: 'offline', // Default, updated by ChatSidebarItem
                 lastMessage: data.lastMessage || "Image",
                 time: timeDisplay,
                 unread: data.unread || 0
-            };
-        });
+            });
+        }
 
         chats.forEach(newChat => {
             const oldChat = prevInboxRef.current.find(c => c.id === newChat.id);
@@ -1028,7 +1043,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     });
 
     return () => unsubscribe();
-  }, [currentUser, selectedContact.id]);
+  }, [currentUser, selectedContact.id, isAdminOrOwner]);
 
   // Click outside menu to close
   useEffect(() => {
