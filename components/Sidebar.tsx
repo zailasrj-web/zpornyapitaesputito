@@ -141,7 +141,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
     <>
       {/* Backdrop Overlay - Only on mobile */}
       <div 
-        className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-40 md:hidden transition-opacity duration-300 ${
+        className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-[150] md:hidden transition-opacity duration-300 ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
         onClick={onClose}
@@ -149,7 +149,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
 
       {/* Sidebar Container */}
       <aside 
-        className={`fixed left-0 top-0 h-screen w-72 md:w-64 bg-black/95 md:bg-black/90 backdrop-blur-xl border-r border-white/5 flex flex-col z-50 font-sans shadow-2xl transition-transform duration-300 ease-in-out ${
+        className={`fixed left-0 top-0 h-screen w-72 md:w-64 bg-black/95 md:bg-black/90 backdrop-blur-xl border-r border-white/5 flex flex-col z-[200] font-sans shadow-2xl transition-transform duration-300 ease-in-out ${
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >

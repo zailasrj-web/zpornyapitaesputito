@@ -1322,9 +1322,10 @@ const App: React.FC = () => {
           
           {currentView === 'feed' && (
             user ? (
-              <div className="fixed inset-6 md:inset-8 z-50 bg-gradient-to-b from-gray-900 to-black rounded-[2.5rem] overflow-hidden shadow-2xl border-2 border-gray-700/50 backdrop-blur-sm">
-                <FeedView />
-              </div>
+              <FeedView 
+                onClose={() => setCurrentView('home')}
+                onToggleSidebar={toggleSidebar}
+              />
             ) : (
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-[fadeIn_0.3s_ease-out]">
                 <div className="w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center mb-6">
