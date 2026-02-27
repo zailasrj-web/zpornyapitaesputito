@@ -68,13 +68,14 @@ const FeedView: React.FC<FeedViewProps> = ({ onClose, onToggleSidebar }) => {
   // Touch/Swipe state
   const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
   const [touchEnd, setTouchEnd] = useState<{ x: number; y: number } | null>(null);
+  const [isSwiping, setIsSwiping] = useState(false);
   
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
   const currentUser = auth.currentUser;
 
-  const minSwipeDistance = 50;
+  const minSwipeDistance = 30; // Reduced for better sensitivity
   const currentVideo = videos[currentIndex];
 
   // Check subscription status
@@ -139,7 +140,15 @@ const FeedView: React.FC<FeedViewProps> = ({ onClose, onToggleSidebar }) => {
         };
       });
       
-      setVideos(fetchedVideos);
+      // Shuffle videos for random order (Fisher-Yates shuffle)
+      const shuffledVideos = [...fetchedVideos];
+      for (let i = shuffledVideos.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledVideos[i], shuffledVideos[j]] = [shuffledVideos[j], shuffledVideos[i]];
+      }
+      
+      console.log('Loaded and shuffled videos:', shuffledVideos.length);
+      setVideos(shuffledVideos);
     });
 
     return () => unsubscribe();
@@ -229,9 +238,60 @@ const FeedView: React.FC<FeedViewProps> = ({ onClose, onToggleSidebar }) => {
     }
   }, [currentIndex, isPlaying]);
 
+  // Wheel/scroll handler for desktop
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    let scrollTimeout: NodeJS.Timeout;
+    
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      
+      // Debounce scroll events
+      clearTimeout(scrollTimeout);
+      scrollTimeout = setTimeout(() => {
+        if (e.deltaY > 0) {
+          // Scroll down - next video
+          handleNextVideo();
+        } else if (e.deltaY < 0) {
+          // Scroll up - previous video
+          handlePrevVideo();
+        }
+      }, 100);
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    
+    return () => {
+      container.removeEventListener('wheel', handleWheel);
+      clearTimeout(scrollTimeout);
+    };
+  }, [currentIndex, videos.length]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        handlePrevVideo();
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        handleNextVideo();
+      } else if (e.key === ' ') {
+        e.preventDefault();
+        handlePlayPause();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [currentIndex, videos.length, isPlaying]);
+
   // Touch handlers for swipe
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null);
+    setIsSwiping(false);
     setTouchStart({
       x: e.targetTouches[0].clientX,
       y: e.targetTouches[0].clientY
@@ -239,28 +299,60 @@ const FeedView: React.FC<FeedViewProps> = ({ onClose, onToggleSidebar }) => {
   };
 
   const handleTouchMove = (e: React.TouchEvent) => {
-    setTouchEnd({
+    if (!touchStart) return;
+    
+    const currentTouch = {
       x: e.targetTouches[0].clientX,
       y: e.targetTouches[0].clientY
-    });
+    };
+    
+    setTouchEnd(currentTouch);
+    
+    // Check if it's a vertical swipe
+    const distanceY = Math.abs(touchStart.y - currentTouch.y);
+    const distanceX = Math.abs(touchStart.x - currentTouch.x);
+    
+    if (distanceY > distanceX && distanceY > 10) {
+      setIsSwiping(true);
+      // Prevent default scrolling
+      e.preventDefault();
+    }
   };
 
   const handleTouchEnd = () => {
-    if (!touchStart || !touchEnd) return;
+    if (!touchStart || !touchEnd) {
+      setTouchStart(null);
+      setTouchEnd(null);
+      setIsSwiping(false);
+      return;
+    }
     
     const distanceY = touchStart.y - touchEnd.y;
     const distanceX = touchStart.x - touchEnd.x;
     const isVerticalSwipe = Math.abs(distanceY) > Math.abs(distanceX);
     
+    console.log('Swipe detected:', {
+      distanceY,
+      distanceX,
+      isVerticalSwipe,
+      minDistance: minSwipeDistance
+    });
+    
     if (isVerticalSwipe && Math.abs(distanceY) > minSwipeDistance) {
       if (distanceY > 0) {
         // Swipe up - next video
+        console.log('Swiped up - next video');
         handleNextVideo();
       } else {
         // Swipe down - previous video
+        console.log('Swiped down - previous video');
         handlePrevVideo();
       }
     }
+    
+    setTouchStart(null);
+    setTouchEnd(null);
+    setIsSwiping(false);
   };
 
   const handlePlayPause = () => {
@@ -340,21 +432,27 @@ const FeedView: React.FC<FeedViewProps> = ({ onClose, onToggleSidebar }) => {
   }, [isDragging]);
 
   const handleNextVideo = () => {
-    if (currentIndex < videos.length - 1) {
+    // Loop back to start if at the end
+    if (currentIndex >= videos.length - 1) {
+      setCurrentIndex(0);
+    } else {
       setCurrentIndex(currentIndex + 1);
-      setProgress(0);
-      setCurrentTime(0);
-      setShowComments(false);
     }
+    setProgress(0);
+    setCurrentTime(0);
+    setShowComments(false);
   };
 
   const handlePrevVideo = () => {
-    if (currentIndex > 0) {
+    // Loop to end if at the start
+    if (currentIndex <= 0) {
+      setCurrentIndex(videos.length - 1);
+    } else {
       setCurrentIndex(currentIndex - 1);
-      setProgress(0);
-      setCurrentTime(0);
-      setShowComments(false);
     }
+    setProgress(0);
+    setCurrentTime(0);
+    setShowComments(false);
   };
 
   const handleLike = async () => {
@@ -644,24 +742,14 @@ const FeedView: React.FC<FeedViewProps> = ({ onClose, onToggleSidebar }) => {
         <div className="absolute right-4 top-1/2 -translate-y-1/2 flex flex-col gap-4 z-[105]">
           <button
             onClick={handlePrevVideo}
-            disabled={currentIndex === 0}
-            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${
-              currentIndex === 0
-                ? 'bg-white/5 text-white/30 cursor-not-allowed'
-                : 'bg-white/10 backdrop-blur-sm text-white hover:bg-white/20'
-            }`}
+            className="w-12 h-12 flex items-center justify-center rounded-full transition-all bg-white/10 backdrop-blur-sm text-white hover:bg-white/20"
           >
             <i className="fa-solid fa-chevron-up text-xl"></i>
           </button>
 
           <button
             onClick={handleNextVideo}
-            disabled={currentIndex === videos.length - 1}
-            className={`w-12 h-12 flex items-center justify-center rounded-full transition-all ${
-              currentIndex === videos.length - 1
-                ? 'bg-white/5 text-white/30 cursor-not-allowed'
-                : 'bg-white/10 backdrop-blur-sm text-white hover:bg-white/20'
-            }`}
+            className="w-12 h-12 flex items-center justify-center rounded-full transition-all bg-white/10 backdrop-blur-sm text-white hover:bg-white/20"
           >
             <i className="fa-solid fa-chevron-down text-xl"></i>
           </button>
