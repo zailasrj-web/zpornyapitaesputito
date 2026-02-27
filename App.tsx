@@ -1012,6 +1012,7 @@ const App: React.FC = () => {
         onViewProfile={handleViewProfile}
         userEmail={user?.email}
         onLogin={() => openLogin('Login to continue')}
+        isGlobalBanned={isGlobalBanned}
       />
 
       <main className={`flex-1 relative w-full transition-all duration-300 ease-in-out ${isSidebarOpen ? 'md:ml-64' : 'ml-0'}`}>

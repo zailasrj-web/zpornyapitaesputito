@@ -18,6 +18,7 @@ import {
   addDoc,
   increment
 } from 'firebase/firestore';
+import SupportTicketsPanel from './SupportTicketsPanel';
 
 interface AdminPanelProps {
   admins: string[];

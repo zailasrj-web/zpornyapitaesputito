@@ -15,6 +15,7 @@ interface SidebarProps {
   onViewProfile: (userId: string) => void;
   userEmail?: string;
   onLogin?: () => void;
+  isGlobalBanned?: boolean;
 }
 
 interface UserSearchResult {
@@ -24,7 +25,7 @@ interface UserSearchResult {
   avatar?: string;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onClose, onUpgrade, isAdmin, userTier = 'Free', onViewProfile, userEmail, onLogin }) => {
+const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onClose, onUpgrade, isAdmin, userTier = 'Free', onViewProfile, userEmail, onLogin, isGlobalBanned = false }) => {
   const OWNER_EMAIL = 'zailasrj@gmail.com';
   const isOwner = userEmail === OWNER_EMAIL;
   const [searchTerm, setSearchTerm] = useState('');
@@ -270,123 +271,148 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
             </div>
 
             {/* Navigation Items */}
-            <a 
-                href="#" 
-                onClick={(e) => { 
-                    e.preventDefault(); 
-                    if (!userEmail && onLogin) {
-                        onLogin();
-                        onClose();
-                    } else {
-                        onNavigate('create'); 
-                        onClose();
-                    }
-                }}
-                className={getNavItemClass(currentView === 'create')}
-            >
-                <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
-                    <i className="fa-regular fa-square-plus"></i>
-                </span>
-                Create
-            </a>
-
-            {/* Notifications Button */}
-            <button
-                onClick={(e) => { e.preventDefault(); setShowNotifications(!showNotifications); }}
-                className={`w-full ${getNavItemClass(false)} relative`}
-            >
-                <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity relative">
-                    <i className="fa-regular fa-bell"></i>
-                    {unreadCount > 0 && (
-                        <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
-                            {unreadCount > 9 ? '9+' : unreadCount}
+            {!isGlobalBanned && (
+                <>
+                    <a 
+                        href="#" 
+                        onClick={(e) => { 
+                            e.preventDefault(); 
+                            if (!userEmail && onLogin) {
+                                onLogin();
+                                onClose();
+                            } else {
+                                onNavigate('create'); 
+                                onClose();
+                            }
+                        }}
+                        className={getNavItemClass(currentView === 'create')}
+                    >
+                        <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
+                            <i className="fa-regular fa-square-plus"></i>
                         </span>
-                    )}
-                </span>
-                Notifications
-                <i className={`fa-solid fa-chevron-${showNotifications ? 'up' : 'down'} ml-auto text-xs text-gray-500`}></i>
-            </button>
+                        Create
+                    </a>
 
-            {/* Notifications Panel (Collapsible) */}
-            {showNotifications && (
-                <div className="ml-2 mr-1 mb-2 rounded-xl border border-white/10 bg-[#0A0A0A] overflow-hidden animate-[fadeIn_0.2s_ease-out] max-h-[400px]">
-                    <NotificationsPanel 
-                        onVideoClick={(videoId) => {
-                            // Handle video click - navigate to video
-                            console.log('Navigate to video:', videoId);
-                            setShowNotifications(false);
-                            onClose();
+                    {/* Notifications Button */}
+                    <button
+                        onClick={(e) => { e.preventDefault(); setShowNotifications(!showNotifications); }}
+                        className={`w-full ${getNavItemClass(false)} relative`}
+                    >
+                        <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity relative">
+                            <i className="fa-regular fa-bell"></i>
+                            {unreadCount > 0 && (
+                                <span className="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full flex items-center justify-center animate-pulse">
+                                    {unreadCount > 9 ? '9+' : unreadCount}
+                                </span>
+                            )}
+                        </span>
+                        Notifications
+                        <i className={`fa-solid fa-chevron-${showNotifications ? 'up' : 'down'} ml-auto text-xs text-gray-500`}></i>
+                    </button>
+
+                    {/* Notifications Panel (Collapsible) */}
+                    {showNotifications && (
+                        <div className="ml-2 mr-1 mb-2 rounded-xl border border-white/10 bg-[#0A0A0A] overflow-hidden animate-[fadeIn_0.2s_ease-out] max-h-[400px]">
+                            <NotificationsPanel 
+                                onVideoClick={(videoId) => {
+                                    // Handle video click - navigate to video
+                                    console.log('Navigate to video:', videoId);
+                                    setShowNotifications(false);
+                                    onClose();
+                                }}
+                                onProfileClick={(userId) => {
+                                    onViewProfile(userId);
+                                    setShowNotifications(false);
+                                    if (window.innerWidth < 768) onClose();
+                                }}
+                            />
+                        </div>
+                    )}
+
+                    <a 
+                        href="#" 
+                        onClick={(e) => { e.preventDefault(); onNavigate('home'); onClose(); }}
+                        className={getNavItemClass(currentView === 'home')}
+                    >
+                        <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
+                            <i className="fa-regular fa-compass"></i>
+                        </span>
+                        Explore
+                    </a>
+
+                    <a 
+                        href="#" 
+                        onClick={(e) => { e.preventDefault(); onNavigate('chat'); onClose(); }}
+                        className={getNavItemClass(currentView === 'chat')}
+                    >
+                        <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
+                            <i className="fa-regular fa-comment-dots"></i>
+                        </span>
+                        Chat
+                    </a>
+
+                    <a 
+                        href="#" 
+                        onClick={(e) => { 
+                            e.preventDefault(); 
+                            if (!userEmail && onLogin) {
+                                onLogin();
+                                onClose();
+                            } else {
+                                onNavigate('feed'); 
+                                onClose();
+                            }
                         }}
-                        onProfileClick={(userId) => {
-                            onViewProfile(userId);
-                            setShowNotifications(false);
-                            if (window.innerWidth < 768) onClose();
+                        className={getNavItemClass(currentView === 'feed')}
+                    >
+                        <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
+                            <i className="fa-solid fa-play"></i>
+                        </span>
+                        Feed
+                    </a>
+
+                    <a 
+                        href="#" 
+                        onClick={(e) => { 
+                            e.preventDefault(); 
+                            if (!userEmail && onLogin) {
+                                onLogin();
+                                onClose();
+                            } else {
+                                onNavigate('community'); 
+                                onClose();
+                            }
                         }}
-                    />
-                </div>
+                        className={getNavItemClass(currentView === 'community')}
+                    >
+                        <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
+                            <i className="fa-solid fa-user-group"></i>
+                        </span>
+                        Community
+                    </a>
+                </>
             )}
 
-            <a 
-                href="#" 
-                onClick={(e) => { e.preventDefault(); onNavigate('home'); onClose(); }}
-                className={getNavItemClass(currentView === 'home')}
-            >
-                <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
-                    <i className="fa-regular fa-compass"></i>
-                </span>
-                Explore
-            </a>
-
-            <a 
-                href="#" 
-                onClick={(e) => { e.preventDefault(); onNavigate('chat'); onClose(); }}
-                className={getNavItemClass(currentView === 'chat')}
-            >
-                <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
-                    <i className="fa-regular fa-comment-dots"></i>
-                </span>
-                Chat
-            </a>
-
-            <a 
-                href="#" 
-                onClick={(e) => { 
-                    e.preventDefault(); 
-                    if (!userEmail && onLogin) {
-                        onLogin();
+            {/* Support Chat - Only visible for banned users */}
+            {isGlobalBanned && (
+                <a 
+                    href="#" 
+                    onClick={(e) => { 
+                        e.preventDefault(); 
+                        onNavigate('chat'); 
                         onClose();
-                    } else {
-                        onNavigate('feed'); 
-                        onClose();
-                    }
-                }}
-                className={getNavItemClass(currentView === 'feed')}
-            >
-                <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
-                    <i className="fa-solid fa-play"></i>
-                </span>
-                Feed
-            </a>
-
-            <a 
-                href="#" 
-                onClick={(e) => { 
-                    e.preventDefault(); 
-                    if (!userEmail && onLogin) {
-                        onLogin();
-                        onClose();
-                    } else {
-                        onNavigate('community'); 
-                        onClose();
-                    }
-                }}
-                className={getNavItemClass(currentView === 'community')}
-            >
-                <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
-                    <i className="fa-solid fa-user-group"></i>
-                </span>
-                Community
-            </a>
+                    }}
+                    className="flex items-center px-4 py-3 text-sm font-semibold rounded-xl transition-all duration-200 group border border-yellow-500/30 bg-yellow-500/10 text-yellow-400 hover:bg-yellow-500/20"
+                >
+                    <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
+                        <i className="fa-solid fa-life-ring"></i>
+                    </span>
+                    Support Chat
+                    <span className="ml-auto text-xs bg-yellow-500/20 px-2 py-0.5 rounded-full border border-yellow-500/30">
+                        Unban Request
+                    </span>
+                </a>
+            )}
 
             {isAdmin && (
                 <a
