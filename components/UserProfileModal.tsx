@@ -163,22 +163,34 @@ const UserProfileModal: React.FC<UserProfileModalProps> = ({
       await updateDoc(userRef, {
         chatIsolated: true,
         isolationReason: muteReason,
-        isolatedBy: currentUser.email,
+        isolatedBy: currentUser.uid,
+        isolatedByEmail: currentUser.email,
         isolatedAt: serverTimestamp()
       });
 
       // Create isolated chat room
-      const isolatedChatRef = doc(db, 'isolatedChats', user.uid);
+      const isolatedChatRef = doc(db, 'isolatedChats', `isolated_${user.uid}`);
       await setDoc(isolatedChatRef, {
         userId: user.uid,
+        userName: user.displayName,
+        userEmail: user.email,
+        userPhotoURL: user.photoURL,
         adminId: currentUser.uid,
+        adminName: currentUser.displayName,
+        adminEmail: currentUser.email,
         createdAt: serverTimestamp(),
-        active: true
+        active: true,
+        reason: muteReason
       });
 
-      alert('User isolated successfully. They can only chat with admins now.');
+      alert('User isolated successfully. Opening isolated chat...');
       setShowConfirmModal(false);
       onClose();
+      
+      // Trigger callback to open isolated chat in parent component
+      if (onStartChat) {
+        onStartChat();
+      }
     } catch (error) {
       console.error('Error isolating user:', error);
       alert('Failed to isolate user');

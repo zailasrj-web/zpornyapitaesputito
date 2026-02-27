@@ -59,6 +59,7 @@ interface Contact {
   isSupportTicket?: boolean; // Flag for support tickets
   ticketStatus?: 'open' | 'in_progress' | 'resolved';
   userId?: string; // User ID for support tickets
+  isIsolated?: boolean; // Flag for isolated chats
 }
 
 interface ChatMetadata {
@@ -474,10 +475,36 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   };
 
   // Handle Start Chat from Profile
-  const handleStartChatFromProfile = () => {
+  const handleStartChatFromProfile = async () => {
     if (!selectedUserProfile) return;
     
-    // Find or create chat with this user
+    // Check if user is isolated
+    try {
+      const userRef = doc(db, 'users', selectedUserProfile.uid);
+      const userSnap = await getDoc(userRef);
+      
+      if (userSnap.exists() && userSnap.data().chatIsolated === true) {
+        // Open isolated chat
+        setSelectedContact({
+          id: `isolated_${selectedUserProfile.uid}`,
+          name: selectedUserProfile.displayName,
+          avatar: selectedUserProfile.photoURL,
+          status: 'online',
+          lastMessage: 'Isolated chat',
+          time: 'Now',
+          unread: 0,
+          isIsolated: true
+        });
+        
+        setShowUserProfile(false);
+        setShowMobileList(false);
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking isolation status:', error);
+    }
+    
+    // Find or create normal chat with this user
     const existingChat = inboxChats.find(c => c.id === selectedUserProfile.uid);
     
     if (existingChat) {
@@ -3120,21 +3147,34 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         </>
       )}
       
-      {/* Show Isolated Chat if user is isolated */}
-      {!isChatBanned && isIsolated && (
+      {/* Show Isolated Chat if user is isolated OR admin is viewing isolated chat */}
+      {(!isChatBanned && isIsolated) || (isAdminOrOwner && selectedContact.isIsolated) ? (
         <IsolatedChatView 
           currentUser={currentUser!}
           isAdmin={isAdminOrOwner}
+          targetUserId={selectedContact.isIsolated ? selectedContact.id.replace('isolated_', '') : undefined}
           onClose={isAdminOrOwner ? async () => {
             // Admin closes isolation
-            const userRef = doc(db, 'users', selectedContact.id);
+            const userId = selectedContact.id.replace('isolated_', '');
+            const userRef = doc(db, 'users', userId);
             await updateDoc(userRef, {
               chatIsolated: false,
               isolationReason: null
             });
+            
+            // Return to community chat
+            setSelectedContact({ 
+              id: GENERAL_CHAT_ID, 
+              name: "Community Chat", 
+              avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", 
+              status: 'online', 
+              lastMessage: "Welcome", 
+              time: "Now", 
+              unread: 0 
+            });
           } : undefined}
         />
-      )}
+      ) : null}
       
       {/* Normal Chat View */}
       {!isChatBanned && !isIsolated && (
@@ -3354,6 +3394,12 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                              <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-xs font-bold rounded-full flex items-center gap-1">
                                  <i className="fa-solid fa-ticket"></i>
                                  {selectedContact.ticketStatus === 'open' ? 'Nuevo' : selectedContact.ticketStatus === 'in_progress' ? 'En Progreso' : 'Resuelto'}
+                             </span>
+                         )}
+                         {selectedContact.isIsolated && (
+                             <span className="px-2 py-0.5 bg-red-500/20 text-red-400 text-xs font-bold rounded-full flex items-center gap-1">
+                                 <i className="fa-solid fa-user-lock"></i>
+                                 ISOLATED
                              </span>
                          )}
                      </h3>

@@ -26,12 +26,16 @@ interface IsolatedChatViewProps {
   currentUser: User;
   isAdmin: boolean;
   onClose?: () => void;
+  targetUserId?: string; // Optional: for admins viewing isolated user's chat
 }
 
-const IsolatedChatView: React.FC<IsolatedChatViewProps> = ({ currentUser, isAdmin, onClose }) => {
+const IsolatedChatView: React.FC<IsolatedChatViewProps> = ({ currentUser, isAdmin, onClose, targetUserId }) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Use targetUserId if provided (admin viewing user's chat), otherwise use currentUser.uid
+  const chatUserId = targetUserId || currentUser.uid;
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -43,7 +47,7 @@ const IsolatedChatView: React.FC<IsolatedChatViewProps> = ({ currentUser, isAdmi
 
   // Load messages
   useEffect(() => {
-    const chatId = `isolated_${currentUser.uid}`;
+    const chatId = `isolated_${chatUserId}`;
     const q = query(
       collection(db, 'isolatedChats', chatId, 'messages'),
       orderBy('createdAt', 'asc')
@@ -58,13 +62,13 @@ const IsolatedChatView: React.FC<IsolatedChatViewProps> = ({ currentUser, isAdmi
     });
 
     return () => unsubscribe();
-  }, [currentUser.uid]);
+  }, [chatUserId]);
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
 
     try {
-      const chatId = `isolated_${currentUser.uid}`;
+      const chatId = `isolated_${chatUserId}`;
       await addDoc(collection(db, 'isolatedChats', chatId, 'messages'), {
         text: inputText.trim(),
         senderUid: currentUser.uid,
