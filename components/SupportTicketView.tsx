@@ -90,7 +90,8 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
             console.log('🎫 USER: Using existing ticket:', {
               ticketId: existingTicket.id,
               status: ticketData.status,
-              userPhotoURL: ticketData.userPhotoURL
+              userPhotoURL: ticketData.userPhotoURL,
+              fullPath: `supportTickets/${existingTicket.id}/messages`
             });
             
             setTicketId(existingTicket.id);

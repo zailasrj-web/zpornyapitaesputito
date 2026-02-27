@@ -533,49 +533,80 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     // Find or create support ticket
     try {
       const ticketsRef = collection(db, 'supportTickets');
-      const q = query(
+      
+      // First, try to find an OPEN ticket
+      const openQuery = query(
         ticketsRef,
         where('userId', '==', currentUser.uid),
         where('status', '==', 'open')
       );
       
-      const snapshot = await getDocs(q);
+      let snapshot = await getDocs(openQuery);
       let ticketId;
+      let ticketData;
       
       if (!snapshot.empty) {
-        // Use existing ticket
+        // Use existing open ticket
         ticketId = snapshot.docs[0].id;
-        console.log('📋 Using existing support ticket:', ticketId);
+        ticketData = snapshot.docs[0].data();
+        console.log('📋 Using existing OPEN ticket:', ticketId);
       } else {
-        // Create new ticket
-        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
-        const userData = userDoc.exists() ? userDoc.data() : {};
-        const username = userData.username || currentUser.displayName || 'User';
-        const realPhotoURL = currentUser.photoURL || userData.photoURL || `https://ui-avatars.com/api/?name=${username}`;
+        // If no open ticket, find the most recent ticket and reopen it
+        const allTicketsQuery = query(
+          ticketsRef,
+          where('userId', '==', currentUser.uid),
+          orderBy('createdAt', 'desc'),
+          limit(1)
+        );
         
-        const newTicket = await addDoc(ticketsRef, {
-          userId: currentUser.uid,
-          userEmail: currentUser.email,
-          userDisplayName: username,
-          username: username,
-          userPhotoURL: realPhotoURL,
-          assignedAdminId: bannedByAdminId || null,
-          status: 'open',
-          reason: 'Chat ban appeal',
-          message: 'Solicitud de apelación de baneo del chat',
-          createdAt: serverTimestamp(),
-          lastMessageAt: serverTimestamp()
-        });
+        const allSnapshot = await getDocs(allTicketsQuery);
         
-        ticketId = newTicket.id;
-        console.log('📋 Created new support ticket:', ticketId);
+        if (!allSnapshot.empty) {
+          // Reopen the most recent ticket
+          ticketId = allSnapshot.docs[0].id;
+          ticketData = allSnapshot.docs[0].data();
+          
+          await updateDoc(doc(db, 'supportTickets', ticketId), {
+            status: 'open',
+            reopenedAt: serverTimestamp()
+          });
+          
+          console.log('📋 Reopened existing ticket:', ticketId);
+        } else {
+          // Create new ticket only if user has NO tickets at all
+          const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+          const userData = userDoc.exists() ? userDoc.data() : {};
+          const username = userData.username || currentUser.displayName || 'User';
+          const realPhotoURL = currentUser.photoURL || userData.photoURL || `https://ui-avatars.com/api/?name=${username}`;
+          
+          const newTicket = await addDoc(ticketsRef, {
+            userId: currentUser.uid,
+            userEmail: currentUser.email,
+            userDisplayName: username,
+            username: username,
+            userPhotoURL: realPhotoURL,
+            assignedAdminId: bannedByAdminId || null,
+            status: 'open',
+            reason: 'Chat ban appeal',
+            message: 'Solicitud de apelación de baneo del chat',
+            createdAt: serverTimestamp(),
+            lastMessageAt: serverTimestamp()
+          });
+          
+          ticketId = newTicket.id;
+          ticketData = {
+            userDisplayName: username,
+            userPhotoURL: realPhotoURL
+          };
+          console.log('📋 Created new support ticket:', ticketId);
+        }
       }
       
       // Set the ticket as selected contact
       setSelectedContact({
         id: `ticket_${ticketId}`,
         name: 'Soporte - Apelación de Ban',
-        avatar: 'https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png',
+        avatar: ticketData?.userPhotoURL || 'https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png',
         status: 'online',
         lastMessage: 'Ticket de soporte',
         time: 'Ahora',
@@ -3043,7 +3074,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-semibold text-gray-400">
                           {msg.displayName}
-                          {isAdminMsg && (
+                          {isAdminMsg && !isMe && (
                             <span className="ml-1 text-[10px] bg-accent/20 text-accent px-1.5 py-0.5 rounded">
                               ADMIN
                             </span>
