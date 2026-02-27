@@ -990,24 +990,9 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         orderBy("timestamp", "desc")
     );
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-        const chats: Contact[] = [];
-        
-        for (const docSnap of snapshot.docs) {
-            const data = docSnap.data();
-            const partnerId = data.partnerId;
-            
-            // Skip if this is an isolated chat (check if partner is isolated)
-            if (isAdminOrOwner) {
-                const partnerRef = doc(db, 'users', partnerId);
-                const partnerSnap = await getDoc(partnerRef);
-                
-                if (partnerSnap.exists() && partnerSnap.data().chatIsolated === true) {
-                    // Skip this chat, it will appear in isolatedChats instead
-                    continue;
-                }
-            }
-            
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+        const chats: Contact[] = snapshot.docs.map(doc => {
+            const data = doc.data();
             let timeDisplay = "Now";
             if (data.timestamp) {
                 const date = data.timestamp.toDate();
@@ -1019,16 +1004,16 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                 else timeDisplay = `${Math.floor(diff/86400)}d`;
             }
 
-            chats.push({
-                id: partnerId,
+            return {
+                id: data.partnerId,
                 name: data.partnerName || "User",
                 avatar: data.partnerAvatar || "https://ui-avatars.com/api/?name=User",
                 status: 'offline', // Default, updated by ChatSidebarItem
                 lastMessage: data.lastMessage || "Image",
                 time: timeDisplay,
                 unread: data.unread || 0
-            });
-        }
+            };
+        });
 
         chats.forEach(newChat => {
             const oldChat = prevInboxRef.current.find(c => c.id === newChat.id);
@@ -1043,7 +1028,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     });
 
     return () => unsubscribe();
-  }, [currentUser, selectedContact.id, isAdminOrOwner]);
+  }, [currentUser, selectedContact.id]);
 
   // Click outside menu to close
   useEffect(() => {
@@ -1258,6 +1243,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     
     const unsubscribe = onSnapshot(isolatedChatsRef, async (snapshot) => {
       const chats: Contact[] = [];
+      const orphanedChats: string[] = [];
       
       for (const docSnap of snapshot.docs) {
         const data = docSnap.data();
@@ -1279,6 +1265,53 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
             unread: 0,
             isIsolated: true
           });
+        } else {
+          // User is no longer isolated, mark for cleanup
+          orphanedChats.push(chatId);
+          
+          // If admin is currently viewing this isolated chat, redirect to community
+          if (selectedContact.id === chatId) {
+            setSelectedContact({ 
+              id: GENERAL_CHAT_ID, 
+              name: "Community Chat", 
+              avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", 
+              status: 'online', 
+              lastMessage: "Welcome everyone!", 
+              time: "Now", 
+              unread: 0 
+            });
+            setShowMobileList(false);
+            
+            showAlert({
+              title: 'Chat Cerrado',
+              message: 'El usuario ya no está aislado. Has sido redirigido al chat comunitario.',
+              type: 'info'
+            });
+          }
+        }
+      }
+      
+      // Clean up orphaned isolated chats
+      if (orphanedChats.length > 0) {
+        console.log('🧹 Cleaning up orphaned isolated chats:', orphanedChats);
+        for (const chatId of orphanedChats) {
+          try {
+            // Delete all messages first
+            const messagesRef = collection(db, 'isolatedChats', chatId, 'messages');
+            const messagesSnapshot = await getDocs(messagesRef);
+            
+            const batch = writeBatch(db);
+            messagesSnapshot.forEach((msgDoc) => {
+              batch.delete(doc(db, 'isolatedChats', chatId, 'messages', msgDoc.id));
+            });
+            await batch.commit();
+            
+            // Delete the chat document
+            await deleteDoc(doc(db, 'isolatedChats', chatId));
+            console.log('✅ Deleted orphaned isolated chat:', chatId);
+          } catch (error) {
+            console.error('Error deleting orphaned chat:', chatId, error);
+          }
         }
       }
       
@@ -1286,7 +1319,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     });
 
     return () => unsubscribe();
-  }, [isAdminOrOwner]);
+  }, [isAdminOrOwner, selectedContact.id]);
 
   // 1. Handle Initial Target
   useEffect(() => {
@@ -1336,8 +1369,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
 
     const unsubs: (() => void)[] = [];
 
-    // 1. Listen for Typing & Online Status (Only private chats)
-    if (selectedContact.id !== GENERAL_CHAT_ID) {
+    // 1. Listen for Typing & Online Status (Only private chats, not isolated or support tickets)
+    if (selectedContact.id !== GENERAL_CHAT_ID && !selectedContact.isIsolated && !selectedContact.isSupportTicket) {
         // Typing
         const typingDocRef = doc(db, "chats", chatId, "typing", selectedContact.id);
         const unsubTyping = onSnapshot(typingDocRef, (docSnapshot) => {
@@ -3629,9 +3662,17 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                              </span>
                          </p>
                      ) : (
-                         <p className={`text-xs ${selectedContact.isSupportTicket ? 'text-yellow-500' : selectedContactOnline ? 'text-green-400' : 'text-gray-500'} truncate`}>
+                         <p className={`text-xs ${
+                             selectedContact.isSupportTicket ? 'text-yellow-500' : 
+                             selectedContact.isIsolated ? 'text-red-400' :
+                             selectedContactOnline ? 'text-green-400' : 'text-gray-500'
+                         } truncate`}>
                              {selectedContact.id === GENERAL_CHAT_ID 
                                 ? `${onlineUsers.filter(u => u.isOnline).length} online` 
+                                : selectedContact.isIsolated 
+                                ? 'Admin-Only Isolated Chat'
+                                : selectedContact.isSupportTicket
+                                ? 'Support Ticket'
                                 : (selectedContactOnline ? 'Active now' : `Last seen ${selectedContactLastSeen}`)}
                          </p>
                      )}
