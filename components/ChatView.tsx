@@ -544,6 +544,20 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         chatBannedBy: null
       });
       
+      // Delete all support tickets from this user
+      const ticketsRef = collection(db, 'supportTickets');
+      const q = query(ticketsRef);
+      const ticketsSnapshot = await getDocs(q);
+      
+      const batch = writeBatch(db);
+      ticketsSnapshot.forEach((ticketDoc) => {
+        const ticketData = ticketDoc.data();
+        if (ticketData.userId === userId) {
+          batch.delete(doc(db, 'supportTickets', ticketDoc.id));
+        }
+      });
+      await batch.commit();
+      
       // Log admin action
       await addDoc(collection(db, 'adminLogs'), {
         action: 'CHAT_UNBAN',
@@ -552,6 +566,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         targetUserId: userId,
         timestamp: serverTimestamp()
       });
+      
+      alert('Usuario desbaneado y tickets eliminados');
     } catch (error) {
       console.error('Error unbanning user:', error);
       alert('Error al desbanear usuario');
@@ -867,11 +883,12 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       snapshot.forEach((doc) => {
         const data = doc.data();
         if (data.chatBanned === true) {
+          const username = data.username || data.displayName || 'Unknown User';
           banned.push({
             uid: doc.id,
-            displayName: data.displayName || 'Unknown User',
+            displayName: username,
             email: data.email || '',
-            photoURL: data.photoURL || `https://ui-avatars.com/api/?name=${data.displayName || 'User'}`,
+            photoURL: data.photoURL || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`,
             bannedAt: data.chatBannedAt || null,
             reason: data.chatBanReason || 'No reason provided'
           });
@@ -897,10 +914,11 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       snapshot.forEach((doc) => {
         const data = doc.data();
         const ticketId = doc.id;
+        const userId = data.userId || '';
         
         tickets.push({
-          id: `ticket_${ticketId}`,
-          name: `Ticket: ${data.userDisplayName || 'Usuario'}`,
+          id: `ticket_${ticketId}_user_${userId}`,
+          name: `Ticket: ${data.userDisplayName || data.username || 'Usuario'}`,
           avatar: data.userPhotoURL || `https://ui-avatars.com/api/?name=${data.userDisplayName || 'User'}`,
           status: 'online',
           lastMessage: data.message?.substring(0, 50) || 'Ticket de soporte',
@@ -2946,46 +2964,70 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                         <p className="text-gray-400 text-sm">No hay usuarios baneados</p>
                     </div>
                 ) : (
-                    bannedUsers.map(user => (
-                        <div key={user.uid} className="p-4 border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <div className="flex items-start gap-3">
-                                <img 
-                                    src={user.photoURL} 
-                                    alt={user.displayName}
-                                    className="w-10 h-10 rounded-full object-cover ring-2 ring-red-500/30"
-                                />
-                                <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1">
-                                        <span className="text-sm font-bold text-white truncate">{user.displayName}</span>
-                                        <i className="fa-solid fa-ban text-red-500 text-xs"></i>
-                                    </div>
-                                    <p className="text-xs text-gray-500 truncate mb-1">{user.email}</p>
-                                    <p className="text-xs text-gray-400 mb-2">
-                                        <i className="fa-solid fa-circle-exclamation mr-1"></i>
-                                        {user.reason}
-                                    </p>
-                                    {user.bannedAt && (
-                                        <p className="text-xs text-gray-600 mb-2">
-                                            {new Date(user.bannedAt.toDate()).toLocaleDateString('es-ES', {
-                                                day: 'numeric',
-                                                month: 'short',
-                                                year: 'numeric',
-                                                hour: '2-digit',
-                                                minute: '2-digit'
-                                            })}
+                    bannedUsers.map(user => {
+                        // Find the ticket for this banned user
+                        const userTicket = supportTickets.find(ticket => 
+                            ticket.id.includes(user.uid) || ticket.name.includes(user.displayName)
+                        );
+                        
+                        return (
+                            <button
+                                key={user.uid}
+                                onClick={() => {
+                                    if (userTicket) {
+                                        setSelectedContact(userTicket);
+                                        setShowMobileList(false);
+                                    }
+                                }}
+                                className={`w-full p-4 border-b border-white/5 hover:bg-white/5 transition-colors text-left ${
+                                    userTicket && selectedContact.id === userTicket.id ? 'bg-white/10 border-l-2 border-l-red-500' : ''
+                                }`}
+                            >
+                                <div className="flex items-start gap-3">
+                                    <img 
+                                        src={user.photoURL} 
+                                        alt={user.displayName}
+                                        className="w-10 h-10 rounded-full object-cover ring-2 ring-red-500/30"
+                                    />
+                                    <div className="flex-1 min-w-0">
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-sm font-bold text-white truncate">{user.displayName}</span>
+                                            <i className="fa-solid fa-ban text-red-500 text-xs"></i>
+                                            {userTicket && (
+                                                <i className="fa-solid fa-ticket text-yellow-500 text-xs ml-auto"></i>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-gray-500 truncate mb-1">{user.email}</p>
+                                        <p className="text-xs text-gray-400 mb-2">
+                                            <i className="fa-solid fa-circle-exclamation mr-1"></i>
+                                            {user.reason}
                                         </p>
-                                    )}
-                                    <button
-                                        onClick={() => handleUnbanUser(user.uid)}
-                                        className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
-                                    >
-                                        <i className="fa-solid fa-unlock"></i>
-                                        Desbanear
-                                    </button>
+                                        {user.bannedAt && (
+                                            <p className="text-xs text-gray-600 mb-2">
+                                                {new Date(user.bannedAt.toDate()).toLocaleDateString('es-ES', {
+                                                    day: 'numeric',
+                                                    month: 'short',
+                                                    year: 'numeric',
+                                                    hour: '2-digit',
+                                                    minute: '2-digit'
+                                                })}
+                                            </p>
+                                        )}
+                                        <button
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                handleUnbanUser(user.uid);
+                                            }}
+                                            className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
+                                        >
+                                            <i className="fa-solid fa-unlock"></i>
+                                            Desbanear
+                                        </button>
+                                    </div>
                                 </div>
-                            </div>
-                        </div>
-                    ))
+                            </button>
+                        );
+                    })
                 )}
             </div>
         )}
