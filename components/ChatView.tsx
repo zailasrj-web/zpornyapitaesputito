@@ -22,6 +22,7 @@ import {
 import UserProfileModal from './UserProfileModal';
 import ChatBannedView from './ChatBannedView';
 import IsolatedChatView from './IsolatedChatView';
+import SupportTicketView from './SupportTicketView';
 
 // Cloudinary Config
 const CLOUD_NAME = 'dbfza2zyk';
@@ -337,6 +338,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   // Chat Ban State
   const [isChatBanned, setIsChatBanned] = useState(false);
   const [chatBanReason, setChatBanReason] = useState('');
+  const [bannedByAdminId, setBannedByAdminId] = useState<string | null>(null);
+  const [showSupportTicket, setShowSupportTicket] = useState(false);
 
   // Isolation State
   const [isIsolated, setIsIsolated] = useState(false);
@@ -512,19 +515,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
 
   // Handle Contact Support
   const handleContactSupport = () => {
-    // Create support chat with admin
-    const supportChat: Contact = {
-      id: 'support_admin',
-      name: 'Support Team',
-      avatar: 'https://ui-avatars.com/api/?name=Support&background=FF1B6D&color=fff',
-      status: 'online',
-      lastMessage: 'How can we help you?',
-      time: 'Now',
-      unread: 0
-    };
-    
-    setSelectedContact(supportChat);
-    setIsChatBanned(false); // Temporarily allow access to support chat
+    setShowSupportTicket(true);
   };
 
   // Load More Old Messages
@@ -804,9 +795,11 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         if (data.chatBanned === true) {
           setIsChatBanned(true);
           setChatBanReason(data.chatBanReason || 'Violación de normas del chat');
+          setBannedByAdminId(data.chatBannedBy || null);
         } else {
           setIsChatBanned(false);
           setChatBanReason('');
+          setBannedByAdminId(null);
         }
         
         // Check isolation
@@ -3972,6 +3965,15 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           onClose={() => setShowUserProfile(false)}
           onStartChat={handleStartChatFromProfile}
           onReport={handleReportFromProfile}
+        />
+      )}
+
+      {/* Support Ticket Modal */}
+      {showSupportTicket && currentUser && (
+        <SupportTicketView
+          currentUser={currentUser}
+          bannedByAdminId={bannedByAdminId || undefined}
+          onClose={() => setShowSupportTicket(false)}
         />
       )}
 

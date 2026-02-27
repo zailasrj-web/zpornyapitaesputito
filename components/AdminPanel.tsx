@@ -79,7 +79,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   const OWNER_EMAIL = 'zailasrj@gmail.com';
   const isOwner = currentUserEmail === OWNER_EMAIL;
   
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'moderation' | 'content' | 'settings' | 'logs'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'moderation' | 'content' | 'settings' | 'logs' | 'support'>('dashboard');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   
   // Real Data States
@@ -581,6 +581,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                   <NavButton id="dashboard" icon="fa-chart-line" label="Dashboard" />
                   <NavButton id="users" icon="fa-users-gear" label="User Management" />
                   <NavButton id="moderation" icon="fa-gavel" label="Moderation" />
+                  <NavButton id="support" icon="fa-headset" label="Support Tickets" />
                   <NavButton id="content" icon="fa-video" label="Content Library" />
                   <NavButton id="settings" icon="fa-sliders" label="Platform Settings" />
                   <NavButton id="logs" icon="fa-file-shield" label="Security Logs" />
@@ -1241,6 +1242,11 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                     </div>
                 )}
              </div>
+        )}
+
+        {/* === SUPPORT TICKETS TAB === */}
+        {activeTab === 'support' && (
+            <SupportTicketsPanel currentUser={currentUser} isAdmin={true} />
         )}
 
         {/* === CONTENT LIBRARY TAB === */}
