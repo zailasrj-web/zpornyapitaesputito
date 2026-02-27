@@ -57,6 +57,7 @@ interface Contact {
   unread: number;
   isSupportTicket?: boolean; // Flag for support tickets
   ticketStatus?: 'open' | 'in_progress' | 'resolved';
+  userId?: string; // User ID for support tickets
 }
 
 interface ChatMetadata {
@@ -883,12 +884,32 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       snapshot.forEach((doc) => {
         const data = doc.data();
         if (data.chatBanned === true) {
-          const username = data.username || data.displayName || 'Unknown User';
+          // Try to get username in order of priority
+          let username = data.username || data.displayName;
+          
+          // If still no username, extract from email
+          if (!username && data.email) {
+            username = data.email.split('@')[0];
+          }
+          
+          // Last resort
+          if (!username) {
+            username = 'Unknown User';
+          }
+          
+          // Get photo URL - use the actual photo if available
+          let photoURL = data.photoURL;
+          
+          // Only generate ui-avatars if there's no photo
+          if (!photoURL || photoURL === '') {
+            photoURL = `https://ui-avatars.com/api/?name=${encodeURIComponent(username)}&background=6366f1&color=fff&size=200&bold=true`;
+          }
+          
           banned.push({
             uid: doc.id,
             displayName: username,
             email: data.email || '',
-            photoURL: data.photoURL || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`,
+            photoURL: photoURL,
             bannedAt: data.chatBannedAt || null,
             reason: data.chatBanReason || 'No reason provided'
           });
@@ -917,7 +938,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         const userId = data.userId || '';
         
         tickets.push({
-          id: `ticket_${ticketId}_user_${userId}`,
+          id: `ticket_${ticketId}`,
           name: `Ticket: ${data.userDisplayName || data.username || 'Usuario'}`,
           avatar: data.userPhotoURL || `https://ui-avatars.com/api/?name=${data.userDisplayName || 'User'}`,
           status: 'online',
@@ -925,7 +946,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           time: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Ahora',
           unread: data.status === 'open' ? 1 : 0,
           isSupportTicket: true,
-          ticketStatus: data.status || 'open'
+          ticketStatus: data.status || 'open',
+          userId: userId // Add userId to Contact
         });
       });
       
@@ -2871,56 +2893,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                     </div>
                 </button>
 
-             {/* Support Tickets (Admin Only) */}
-             {isAdminOrOwner && supportTickets.length > 0 && (
-                 <>
-                     <div className="px-4 py-2 bg-[#151515] border-b border-white/5">
-                         <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
-                             <i className="fa-solid fa-ticket mr-2"></i>
-                             Tickets de Soporte ({supportTickets.length})
-                         </span>
-                     </div>
-                     {supportTickets.map(ticket => (
-                         <button
-                             key={ticket.id}
-                             onClick={() => { setSelectedContact(ticket); setShowMobileList(false); }}
-                             className={`w-full flex items-center gap-3 p-4 transition-colors hover:bg-white/5 border-b border-white/5 ${selectedContact.id === ticket.id ? 'bg-white/10 border-l-2 border-l-yellow-500' : ''}`}
-                         >
-                             <div className="relative">
-                                 <img 
-                                     src={ticket.avatar} 
-                                     alt={ticket.name}
-                                     className="w-10 h-10 rounded-full object-cover ring-2 ring-yellow-500/30"
-                                 />
-                                 <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center border-2 border-[#0F0F0F]">
-                                     <i className="fa-solid fa-ticket text-[10px] text-black"></i>
-                                 </div>
-                             </div>
-                             <div className="flex-1 text-left min-w-0">
-                                 <div className="flex justify-between items-center mb-0.5">
-                                     <span className="text-sm font-bold text-white truncate">{ticket.name}</span>
-                                     <span className="text-xs text-gray-500">{ticket.time}</span>
-                                 </div>
-                                 <div className="flex items-center gap-2">
-                                     <p className="text-xs text-gray-400 truncate flex-1">{ticket.lastMessage}</p>
-                                     <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
-                                         ticket.ticketStatus === 'open' 
-                                             ? 'bg-red-500/20 text-red-500' 
-                                             : ticket.ticketStatus === 'in_progress'
-                                             ? 'bg-yellow-500/20 text-yellow-500'
-                                             : 'bg-green-500/20 text-green-500'
-                                     }`}>
-                                         {ticket.ticketStatus === 'open' ? 'Nuevo' : ticket.ticketStatus === 'in_progress' ? 'En Progreso' : 'Resuelto'}
-                                     </span>
-                                 </div>
-                             </div>
-                         </button>
-                     ))}
-                 </>
-             )}
-
-             {/* Divider between tickets and regular chats */}
-             {isAdminOrOwner && supportTickets.length > 0 && inboxChats.length > 0 && (
+             {/* Divider between community chat and private chats */}
+             {inboxChats.length > 0 && (
                  <div className="px-4 py-2 bg-[#151515] border-b border-white/5">
                      <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
                          <i className="fa-solid fa-message mr-2"></i>
@@ -2928,7 +2902,6 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                      </span>
                  </div>
              )}
-                </button>
 
              {/* Dynamic Inbox */}
              {inboxChats.map(chat => (
@@ -2965,21 +2938,22 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                     </div>
                 ) : (
                     bannedUsers.map(user => {
-                        // Find the ticket for this banned user
+                        // Find the ticket for this banned user by userId
                         const userTicket = supportTickets.find(ticket => 
-                            ticket.id.includes(user.uid) || ticket.name.includes(user.displayName)
+                            ticket.userId === user.uid
                         );
                         
                         return (
-                            <button
+                            <div
                                 key={user.uid}
                                 onClick={() => {
                                     if (userTicket) {
                                         setSelectedContact(userTicket);
                                         setShowMobileList(false);
+                                        // Stay in bans tab, don't switch to chats
                                     }
                                 }}
-                                className={`w-full p-4 border-b border-white/5 hover:bg-white/5 transition-colors text-left ${
+                                className={`w-full p-4 border-b border-white/5 hover:bg-white/5 transition-colors cursor-pointer ${
                                     userTicket && selectedContact.id === userTicket.id ? 'bg-white/10 border-l-2 border-l-red-500' : ''
                                 }`}
                             >
@@ -3025,7 +2999,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                                         </button>
                                     </div>
                                 </div>
-                            </button>
+                            </div>
                         );
                     })
                 )}
@@ -3084,19 +3058,39 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                  {selectedContact.isSupportTicket && isAdminOrOwner && (
                      <button 
                          onClick={async () => {
-                             const ticketId = selectedContact.id.replace('ticket_', '');
-                             const ticketRef = doc(db, 'supportTickets', ticketId);
-                             await updateDoc(ticketRef, {
-                                 status: 'resolved',
-                                 resolvedAt: serverTimestamp(),
-                                 resolvedBy: currentUser?.email
-                             });
-                             alert('Ticket marcado como resuelto');
+                             if (!confirm('¿Cerrar este ticket? Esto eliminará todo el historial de mensajes.')) return;
+                             
+                             try {
+                                 const ticketId = selectedContact.id.replace('ticket_', '');
+                                 
+                                 // Delete all messages in the ticket
+                                 const messagesRef = collection(db, 'supportTickets', ticketId, 'messages');
+                                 const messagesSnapshot = await getDocs(messagesRef);
+                                 
+                                 const batch = writeBatch(db);
+                                 messagesSnapshot.forEach((msgDoc) => {
+                                     batch.delete(doc(db, 'supportTickets', ticketId, 'messages', msgDoc.id));
+                                 });
+                                 await batch.commit();
+                                 
+                                 // Update ticket status to closed
+                                 const ticketRef = doc(db, 'supportTickets', ticketId);
+                                 await updateDoc(ticketRef, {
+                                     status: 'closed',
+                                     closedAt: serverTimestamp(),
+                                     closedBy: currentUser?.email
+                                 });
+                                 
+                                 alert('Ticket cerrado y historial eliminado');
+                             } catch (error) {
+                                 console.error('Error closing ticket:', error);
+                                 alert('Error al cerrar el ticket');
+                             }
                          }}
-                         className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
+                         className="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
                      >
-                         <i className="fa-solid fa-check"></i>
-                         Resolver
+                         <i className="fa-solid fa-xmark"></i>
+                         Cerrar Ticket
                      </button>
                  )}
                  {selectedContact.id !== GENERAL_CHAT_ID && !selectedContact.isSupportTicket && (

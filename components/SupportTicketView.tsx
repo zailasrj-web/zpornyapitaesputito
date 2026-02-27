@@ -86,14 +86,20 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
             setTicketId(existingTicket.id);
           } else {
             // Create new ticket
+            const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+            const userData = userDoc.exists() ? userDoc.data() : {};
+            const username = userData.username || currentUser.displayName || 'User';
+            
             const newTicket = await addDoc(collection(db, 'supportTickets'), {
               userId: currentUser.uid,
               userEmail: currentUser.email,
-              userName: currentUser.displayName || 'User',
-              userAvatar: currentUser.photoURL || '',
+              userDisplayName: username,
+              username: username,
+              userPhotoURL: currentUser.photoURL || userData.photoURL || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`,
               assignedAdminId: bannedByAdminId || null,
               status: 'open',
               reason: 'Chat ban appeal',
+              message: 'Solicitud de apelación de baneo del chat',
               createdAt: serverTimestamp(),
               lastMessageAt: serverTimestamp()
             });

@@ -241,9 +241,15 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, title, onDemoL
         // Ensure lowercase for search consistency
         finalUsername = finalUsername.toLowerCase();
 
-        // Generate default avatar if user doesn't have one
+        // Use the actual photo from Firebase Auth (Google, etc.) if available
+        // Only generate ui-avatars as last resort
         const displayNameForAvatar = user.displayName || finalUsername;
-        const defaultPhotoURL = user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameForAvatar)}&background=6366f1&color=fff&size=200&bold=true`;
+        let photoURL = user.photoURL; // Use actual photo from auth provider
+        
+        // Only generate avatar if there's truly no photo
+        if (!photoURL || photoURL.trim() === '') {
+            photoURL = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameForAvatar)}&background=6366f1&color=fff&size=200&bold=true`;
+        }
 
         await setDoc(userRef, {
             username: finalUsername,
@@ -251,8 +257,8 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, title, onDemoL
             name: user.displayName || finalUsername,
             handle: finalUsername,
             email: user.email || '',
-            photoURL: defaultPhotoURL,
-            avatar: defaultPhotoURL,
+            photoURL: photoURL,
+            avatar: photoURL,
             coverPhotoURL: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1000&auto=format&fit=crop',
             bio: '',
             isVerified: false,
@@ -274,10 +280,18 @@ const LoginModal: React.FC<LoginModalProps> = ({ isOpen, onClose, title, onDemoL
             updateData.email = user.email;
         }
         
-        // If user doesn't have a photoURL, generate one
-        if (!existingData.photoURL || existingData.photoURL === '') {
-            const displayNameForAvatar = existingData.displayName || existingData.username || 'User';
-            updateData.photoURL = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameForAvatar)}&background=6366f1&color=fff&size=200&bold=true`;
+        // Update photoURL only if the user doesn't have one OR if Firebase Auth has a better one
+        if (!existingData.photoURL || existingData.photoURL === '' || existingData.photoURL.includes('ui-avatars')) {
+            // If Firebase Auth has a real photo (Google, etc.), use it
+            if (user.photoURL && !user.photoURL.includes('ui-avatars')) {
+                updateData.photoURL = user.photoURL;
+                updateData.avatar = user.photoURL;
+            } else if (!existingData.photoURL || existingData.photoURL === '') {
+                // Only generate ui-avatars if there's truly no photo
+                const displayNameForAvatar = existingData.displayName || existingData.username || 'User';
+                updateData.photoURL = `https://ui-avatars.com/api/?name=${encodeURIComponent(displayNameForAvatar)}&background=6366f1&color=fff&size=200&bold=true`;
+                updateData.avatar = updateData.photoURL;
+            }
         }
         
         await setDoc(userRef, updateData, { merge: true });
