@@ -55,6 +55,8 @@ interface Contact {
   lastMessage: string;
   time: string;
   unread: number;
+  isSupportTicket?: boolean; // Flag for support tickets
+  ticketStatus?: 'open' | 'in_progress' | 'resolved';
 }
 
 interface ChatMetadata {
@@ -269,6 +271,10 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   // Sidebar Tab State (for admins)
   const [sidebarTab, setSidebarTab] = useState<'chats' | 'bans'>('chats');
   const [bannedUsers, setBannedUsers] = useState<{uid: string, displayName: string, email: string, photoURL: string, bannedAt: any, reason: string}[]>([]);
+  
+  // Support Tickets State (for admins)
+  const [supportTickets, setSupportTickets] = useState<Contact[]>([]);
+  const [showTicketsView, setShowTicketsView] = useState(false); // New state for tickets view
   
   // Active Chats List (Inbox)
   const [inboxChats, setInboxChats] = useState<Contact[]>([]);
@@ -878,6 +884,39 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     return () => unsubscribe();
   }, [isAdminOrOwner]);
 
+  // Load Support Tickets (for admins)
+  useEffect(() => {
+    if (!isAdminOrOwner) return;
+
+    const ticketsRef = collection(db, 'supportTickets');
+    const q = query(ticketsRef, orderBy('createdAt', 'desc'));
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const tickets: Contact[] = [];
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        const ticketId = doc.id;
+        
+        tickets.push({
+          id: `ticket_${ticketId}`,
+          name: `Ticket: ${data.userDisplayName || 'Usuario'}`,
+          avatar: data.userPhotoURL || `https://ui-avatars.com/api/?name=${data.userDisplayName || 'User'}`,
+          status: 'online',
+          lastMessage: data.message?.substring(0, 50) || 'Ticket de soporte',
+          time: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Ahora',
+          unread: data.status === 'open' ? 1 : 0,
+          isSupportTicket: true,
+          ticketStatus: data.status || 'open'
+        });
+      });
+      
+      setSupportTickets(tickets);
+    });
+
+    return () => unsubscribe();
+  }, [isAdminOrOwner]);
+
   // 1. Handle Initial Target
   useEffect(() => {
     if (initialTargetId && currentUser) {
@@ -1157,7 +1196,12 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     let collectionRef;
     let chatId: string;
     
-    if (selectedContact.id === GENERAL_CHAT_ID) {
+    // Check if it's a support ticket
+    if (selectedContact.id.startsWith('ticket_')) {
+        const ticketId = selectedContact.id.replace('ticket_', '');
+        collectionRef = collection(db, "supportTickets", ticketId, "messages");
+        chatId = selectedContact.id;
+    } else if (selectedContact.id === GENERAL_CHAT_ID) {
         chatId = GENERAL_CHAT_ID;
         collectionRef = collection(db, "chats", GENERAL_CHAT_ID, "messages");
     } else {
@@ -2147,7 +2191,20 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       let collectionRef;
       let chatId;
 
-      if (selectedContact.id === GENERAL_CHAT_ID) {
+      // Check if it's a support ticket
+      if (selectedContact.id.startsWith('ticket_')) {
+          const ticketId = selectedContact.id.replace('ticket_', '');
+          chatId = selectedContact.id;
+          collectionRef = collection(db, "supportTickets", ticketId, "messages");
+          
+          // Update ticket status to in_progress when admin responds
+          const ticketRef = doc(db, "supportTickets", ticketId);
+          await updateDoc(ticketRef, {
+              status: 'in_progress',
+              lastAdminResponse: serverTimestamp(),
+              respondedBy: currentUser.email
+          });
+      } else if (selectedContact.id === GENERAL_CHAT_ID) {
           chatId = GENERAL_CHAT_ID;
           collectionRef = collection(db, "chats", GENERAL_CHAT_ID, "messages");
           
@@ -2796,6 +2853,65 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                     </div>
                 </button>
 
+             {/* Support Tickets (Admin Only) */}
+             {isAdminOrOwner && supportTickets.length > 0 && (
+                 <>
+                     <div className="px-4 py-2 bg-[#151515] border-b border-white/5">
+                         <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                             <i className="fa-solid fa-ticket mr-2"></i>
+                             Tickets de Soporte ({supportTickets.length})
+                         </span>
+                     </div>
+                     {supportTickets.map(ticket => (
+                         <button
+                             key={ticket.id}
+                             onClick={() => { setSelectedContact(ticket); setShowMobileList(false); }}
+                             className={`w-full flex items-center gap-3 p-4 transition-colors hover:bg-white/5 border-b border-white/5 ${selectedContact.id === ticket.id ? 'bg-white/10 border-l-2 border-l-yellow-500' : ''}`}
+                         >
+                             <div className="relative">
+                                 <img 
+                                     src={ticket.avatar} 
+                                     alt={ticket.name}
+                                     className="w-10 h-10 rounded-full object-cover ring-2 ring-yellow-500/30"
+                                 />
+                                 <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center border-2 border-[#0F0F0F]">
+                                     <i className="fa-solid fa-ticket text-[10px] text-black"></i>
+                                 </div>
+                             </div>
+                             <div className="flex-1 text-left min-w-0">
+                                 <div className="flex justify-between items-center mb-0.5">
+                                     <span className="text-sm font-bold text-white truncate">{ticket.name}</span>
+                                     <span className="text-xs text-gray-500">{ticket.time}</span>
+                                 </div>
+                                 <div className="flex items-center gap-2">
+                                     <p className="text-xs text-gray-400 truncate flex-1">{ticket.lastMessage}</p>
+                                     <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${
+                                         ticket.ticketStatus === 'open' 
+                                             ? 'bg-red-500/20 text-red-500' 
+                                             : ticket.ticketStatus === 'in_progress'
+                                             ? 'bg-yellow-500/20 text-yellow-500'
+                                             : 'bg-green-500/20 text-green-500'
+                                     }`}>
+                                         {ticket.ticketStatus === 'open' ? 'Nuevo' : ticket.ticketStatus === 'in_progress' ? 'En Progreso' : 'Resuelto'}
+                                     </span>
+                                 </div>
+                             </div>
+                         </button>
+                     ))}
+                 </>
+             )}
+
+             {/* Divider between tickets and regular chats */}
+             {isAdminOrOwner && supportTickets.length > 0 && inboxChats.length > 0 && (
+                 <div className="px-4 py-2 bg-[#151515] border-b border-white/5">
+                     <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                         <i className="fa-solid fa-message mr-2"></i>
+                         Chats Privados
+                     </span>
+                 </div>
+             )}
+                </button>
+
              {/* Dynamic Inbox */}
              {inboxChats.map(chat => (
                  <ChatSidebarItem 
@@ -2896,6 +3012,12 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                      <h3 className="text-sm md:text-base font-bold text-white flex items-center gap-2 truncate">
                          <span className="truncate">{selectedContact.name}</span>
                          {selectedContact.id === GENERAL_CHAT_ID && <i className="fa-solid fa-circle-check text-accent text-xs flex-shrink-0"></i>}
+                         {selectedContact.isSupportTicket && (
+                             <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-xs font-bold rounded-full flex items-center gap-1">
+                                 <i className="fa-solid fa-ticket"></i>
+                                 {selectedContact.ticketStatus === 'open' ? 'Nuevo' : selectedContact.ticketStatus === 'in_progress' ? 'En Progreso' : 'Resuelto'}
+                             </span>
+                         )}
                      </h3>
                      {isOtherUserTyping ? (
                          <p className="text-xs text-accent font-bold flex items-center gap-2">
@@ -2907,7 +3029,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                              </span>
                          </p>
                      ) : (
-                         <p className={`text-xs ${selectedContactOnline ? 'text-green-400' : 'text-gray-500'} truncate`}>
+                         <p className={`text-xs ${selectedContact.isSupportTicket ? 'text-yellow-500' : selectedContactOnline ? 'text-green-400' : 'text-gray-500'} truncate`}>
                              {selectedContact.id === GENERAL_CHAT_ID 
                                 ? `${onlineUsers.filter(u => u.isOnline).length} online` 
                                 : (selectedContactOnline ? 'Active now' : `Last seen ${selectedContactLastSeen}`)}
@@ -2917,7 +3039,25 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
              </div>
 
              <div className="flex gap-3 md:gap-4 items-center flex-shrink-0">
-                 {selectedContact.id !== GENERAL_CHAT_ID && (
+                 {selectedContact.isSupportTicket && isAdminOrOwner && (
+                     <button 
+                         onClick={async () => {
+                             const ticketId = selectedContact.id.replace('ticket_', '');
+                             const ticketRef = doc(db, 'supportTickets', ticketId);
+                             await updateDoc(ticketRef, {
+                                 status: 'resolved',
+                                 resolvedAt: serverTimestamp(),
+                                 resolvedBy: currentUser?.email
+                             });
+                             alert('Ticket marcado como resuelto');
+                         }}
+                         className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
+                     >
+                         <i className="fa-solid fa-check"></i>
+                         Resolver
+                     </button>
+                 )}
+                 {selectedContact.id !== GENERAL_CHAT_ID && !selectedContact.isSupportTicket && (
                      <>
                         <button 
                             onClick={() => startCall('audio')} 
