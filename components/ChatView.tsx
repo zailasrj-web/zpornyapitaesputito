@@ -1410,8 +1410,19 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     let collectionRef;
     let chatId: string;
     
+    // Check if it's an isolated chat (admin viewing isolated user)
+    if (selectedContact.isIsolated && selectedContact.id.startsWith('isolated_')) {
+        const userId = selectedContact.id.replace('isolated_', '');
+        chatId = `isolated_${userId}`;
+        collectionRef = collection(db, "isolatedChats", chatId, "messages");
+        console.log('🔒 Loading isolated chat messages:', {
+          userId,
+          chatId,
+          path: `isolatedChats/${chatId}/messages`
+        });
+    }
     // Check if it's a support ticket
-    if (selectedContact.id.startsWith('ticket_')) {
+    else if (selectedContact.id.startsWith('ticket_')) {
         const ticketId = selectedContact.id.replace('ticket_', '');
         collectionRef = collection(db, "supportTickets", ticketId, "messages");
         chatId = selectedContact.id;
@@ -2448,8 +2459,14 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       let collectionRef;
       let chatId;
 
+      // Check if it's an isolated chat
+      if (selectedContact.isIsolated && selectedContact.id.startsWith('isolated_')) {
+          const userId = selectedContact.id.replace('isolated_', '');
+          chatId = `isolated_${userId}`;
+          collectionRef = collection(db, "isolatedChats", chatId, "messages");
+      }
       // Check if it's a support ticket
-      if (selectedContact.id.startsWith('ticket_')) {
+      else if (selectedContact.id.startsWith('ticket_')) {
           const ticketId = selectedContact.id.replace('ticket_', '');
           chatId = selectedContact.id;
           collectionRef = collection(db, "supportTickets", ticketId, "messages");
@@ -3147,32 +3164,11 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         </>
       )}
       
-      {/* Show Isolated Chat if user is isolated OR admin is viewing isolated chat */}
-      {(!isChatBanned && isIsolated) || (isAdminOrOwner && selectedContact.isIsolated) ? (
+      {/* Show Isolated Chat ONLY if current user is isolated (not for admins viewing isolated users) */}
+      {!isChatBanned && isIsolated && !isAdminOrOwner ? (
         <IsolatedChatView 
           currentUser={currentUser!}
-          isAdmin={isAdminOrOwner}
-          targetUserId={selectedContact.isIsolated ? selectedContact.id.replace('isolated_', '') : undefined}
-          onClose={isAdminOrOwner ? async () => {
-            // Admin closes isolation
-            const userId = selectedContact.id.replace('isolated_', '');
-            const userRef = doc(db, 'users', userId);
-            await updateDoc(userRef, {
-              chatIsolated: false,
-              isolationReason: null
-            });
-            
-            // Return to community chat
-            setSelectedContact({ 
-              id: GENERAL_CHAT_ID, 
-              name: "Community Chat", 
-              avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", 
-              status: 'online', 
-              lastMessage: "Welcome", 
-              time: "Now", 
-              unread: 0 
-            });
-          } : undefined}
+          isAdmin={false}
         />
       ) : null}
       
@@ -3423,6 +3419,46 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
              </div>
 
              <div className="flex gap-3 md:gap-4 items-center flex-shrink-0">
+                 {/* End Isolation button for admins viewing isolated chats */}
+                 {selectedContact.isIsolated && isAdminOrOwner && (
+                     <button 
+                         onClick={async () => {
+                             if (!confirm('¿Terminar el aislamiento de este usuario?')) return;
+                             
+                             try {
+                                 const userId = selectedContact.id.replace('isolated_', '');
+                                 const userRef = doc(db, 'users', userId);
+                                 await updateDoc(userRef, {
+                                     chatIsolated: false,
+                                     isolationReason: null,
+                                     isolatedBy: null,
+                                     isolatedAt: null
+                                 });
+                                 
+                                 alert('Aislamiento terminado');
+                                 
+                                 // Return to community chat
+                                 setSelectedContact({ 
+                                     id: GENERAL_CHAT_ID, 
+                                     name: "Community Chat", 
+                                     avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", 
+                                     status: 'online', 
+                                     lastMessage: "Welcome", 
+                                     time: "Now", 
+                                     unread: 0 
+                                 });
+                             } catch (error) {
+                                 console.error('Error ending isolation:', error);
+                                 alert('Error al terminar el aislamiento');
+                             }
+                         }}
+                         className="px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-400 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
+                     >
+                         <i className="fa-solid fa-unlock"></i>
+                         End Isolation
+                     </button>
+                 )}
+                 
                  {selectedContact.isSupportTicket && isAdminOrOwner && (
                      <button 
                          onClick={async () => {
