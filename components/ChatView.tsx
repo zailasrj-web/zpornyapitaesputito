@@ -266,6 +266,10 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   // Mobile View State
   const [showMobileList, setShowMobileList] = useState(!initialTargetId);
   
+  // Sidebar Tab State (for admins)
+  const [sidebarTab, setSidebarTab] = useState<'chats' | 'bans'>('chats');
+  const [bannedUsers, setBannedUsers] = useState<{uid: string, displayName: string, email: string, photoURL: string, bannedAt: any, reason: string}[]>([]);
+  
   // Active Chats List (Inbox)
   const [inboxChats, setInboxChats] = useState<Contact[]>([]);
   
@@ -516,6 +520,36 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   // Handle Contact Support
   const handleContactSupport = () => {
     setShowSupportTicket(true);
+  };
+
+  // Unban User (for admins)
+  const handleUnbanUser = async (userId: string) => {
+    if (!isAdminOrOwner) return;
+    
+    const confirmUnban = confirm('¿Estás seguro de que quieres desbanear a este usuario del chat?');
+    if (!confirmUnban) return;
+    
+    try {
+      const userRef = doc(db, 'users', userId);
+      await updateDoc(userRef, {
+        chatBanned: false,
+        chatBanReason: null,
+        chatBannedAt: null,
+        chatBannedBy: null
+      });
+      
+      // Log admin action
+      await addDoc(collection(db, 'adminLogs'), {
+        action: 'CHAT_UNBAN',
+        adminEmail: currentUser?.email,
+        adminUid: currentUser?.uid,
+        targetUserId: userId,
+        timestamp: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error unbanning user:', error);
+      alert('Error al desbanear usuario');
+    }
   };
 
   // Load More Old Messages
@@ -813,6 +847,36 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
 
     return () => unsubscribe();
   }, [currentUser]);
+
+  // Load Banned Users (for admins)
+  useEffect(() => {
+    if (!isAdminOrOwner) return;
+
+    const usersRef = collection(db, 'users');
+    const q = query(usersRef);
+    
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const banned: {uid: string, displayName: string, email: string, photoURL: string, bannedAt: any, reason: string}[] = [];
+      
+      snapshot.forEach((doc) => {
+        const data = doc.data();
+        if (data.chatBanned === true) {
+          banned.push({
+            uid: doc.id,
+            displayName: data.displayName || 'Unknown User',
+            email: data.email || '',
+            photoURL: data.photoURL || `https://ui-avatars.com/api/?name=${data.displayName || 'User'}`,
+            bannedAt: data.chatBannedAt || null,
+            reason: data.chatBanReason || 'No reason provided'
+          });
+        }
+      });
+      
+      setBannedUsers(banned);
+    });
+
+    return () => unsubscribe();
+  }, [isAdminOrOwner]);
 
   // 1. Handle Initial Target
   useEffect(() => {
@@ -2660,44 +2724,77 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       <div className={`${showMobileList ? 'flex' : 'hidden'} md:flex w-full md:w-80 flex-col border-r border-white/5 bg-[#0F0F0F]`}>
         
         {/* Sidebar Header */}
-        <div className="p-4 border-b border-white/5 flex justify-between items-center">
-            <h2 className="text-xl font-bold text-white tracking-tight">Messages</h2>
-            <div className="flex gap-2">
-                <button className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
-                    <i className="fa-solid fa-pen-to-square"></i>
-                </button>
+        <div className="p-4 border-b border-white/5">
+            <div className="flex justify-between items-center mb-3">
+                <h2 className="text-xl font-bold text-white tracking-tight">Messages</h2>
+                <div className="flex gap-2">
+                    <button className="w-8 h-8 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-gray-400 hover:text-white transition-colors">
+                        <i className="fa-solid fa-pen-to-square"></i>
+                    </button>
+                </div>
             </div>
+            
+            {/* Tabs for Admins */}
+            {isAdminOrOwner && (
+                <div className="flex gap-2">
+                    <button
+                        onClick={() => setSidebarTab('chats')}
+                        className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                            sidebarTab === 'chats'
+                                ? 'bg-accent text-white'
+                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                        }`}
+                    >
+                        <i className="fa-solid fa-comments mr-2"></i>
+                        Chats
+                    </button>
+                    <button
+                        onClick={() => setSidebarTab('bans')}
+                        className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
+                            sidebarTab === 'bans'
+                                ? 'bg-red-500 text-white'
+                                : 'bg-white/5 text-gray-400 hover:bg-white/10 hover:text-white'
+                        }`}
+                    >
+                        <i className="fa-solid fa-ban mr-2"></i>
+                        Bans ({bannedUsers.length})
+                    </button>
+                </div>
+            )}
         </div>
 
-        {/* Search */}
-        <div className="px-4 py-3">
-             <div className="relative">
-                 <i className="fa-solid fa-magnifying-glass absolute left-3 top-3 text-gray-600 text-xs"></i>
-                 <input 
-                    type="text" 
-                    placeholder="Search messages..." 
-                    className="w-full bg-[#151515] border border-white/5 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/10 transition-colors placeholder-gray-600"
-                 />
-             </div>
-        </div>
+        {/* Search (only for chats tab) */}
+        {sidebarTab === 'chats' && (
+            <div className="px-4 py-3">
+                <div className="relative">
+                    <i className="fa-solid fa-magnifying-glass absolute left-3 top-3 text-gray-600 text-xs"></i>
+                    <input 
+                        type="text" 
+                        placeholder="Search messages..." 
+                        className="w-full bg-[#151515] border border-white/5 rounded-lg pl-9 pr-4 py-2.5 text-sm text-white focus:outline-none focus:border-white/10 transition-colors placeholder-gray-600"
+                    />
+                </div>
+            </div>
+        )}
 
         {/* Chats List */}
-        <div className="flex-1 overflow-y-auto scrollbar-hide">
-             {/* General Chat Pinned */}
-             <button 
-                onClick={() => { setSelectedContact({ id: GENERAL_CHAT_ID, name: "Community Chat", avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", status: 'online', lastMessage: "Welcome", time: "Now", unread: 0 }); setShowMobileList(false); }}
-                className={`w-full flex items-center gap-3 p-4 transition-colors hover:bg-white/5 border-b border-white/5 ${selectedContact.id === GENERAL_CHAT_ID ? 'bg-white/10 border-l-2 border-l-accent' : ''}`}
-             >
-                <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent border border-accent/20">
-                    <i className="fa-solid fa-users"></i>
-                </div>
-                <div className="flex-1 text-left">
-                    <div className="flex justify-between items-center mb-0.5">
-                        <span className="text-sm font-bold text-white">Community Chat</span>
+        {sidebarTab === 'chats' && (
+            <div className="flex-1 overflow-y-auto scrollbar-hide">
+                {/* General Chat Pinned */}
+                <button 
+                    onClick={() => { setSelectedContact({ id: GENERAL_CHAT_ID, name: "Community Chat", avatar: "https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png", status: 'online', lastMessage: "Welcome", time: "Now", unread: 0 }); setShowMobileList(false); }}
+                    className={`w-full flex items-center gap-3 p-4 transition-colors hover:bg-white/5 border-b border-white/5 ${selectedContact.id === GENERAL_CHAT_ID ? 'bg-white/10 border-l-2 border-l-accent' : ''}`}
+                >
+                    <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent border border-accent/20">
+                        <i className="fa-solid fa-users"></i>
                     </div>
-                    <p className="text-xs text-gray-400">Official general channel</p>
-                </div>
-             </button>
+                    <div className="flex-1 text-left">
+                        <div className="flex justify-between items-center mb-0.5">
+                            <span className="text-sm font-bold text-white">Community Chat</span>
+                        </div>
+                        <p className="text-xs text-gray-400">Official general channel</p>
+                    </div>
+                </button>
 
              {/* Dynamic Inbox */}
              {inboxChats.map(chat => (
@@ -2722,6 +2819,60 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                  </div>
              )}
         </div>
+        )}
+
+        {/* Banned Users List */}
+        {sidebarTab === 'bans' && (
+            <div className="flex-1 overflow-y-auto scrollbar-hide">
+                {bannedUsers.length === 0 ? (
+                    <div className="p-8 text-center">
+                        <i className="fa-solid fa-shield-check text-4xl text-green-500 mb-3"></i>
+                        <p className="text-gray-400 text-sm">No hay usuarios baneados</p>
+                    </div>
+                ) : (
+                    bannedUsers.map(user => (
+                        <div key={user.uid} className="p-4 border-b border-white/5 hover:bg-white/5 transition-colors">
+                            <div className="flex items-start gap-3">
+                                <img 
+                                    src={user.photoURL} 
+                                    alt={user.displayName}
+                                    className="w-10 h-10 rounded-full object-cover ring-2 ring-red-500/30"
+                                />
+                                <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-2 mb-1">
+                                        <span className="text-sm font-bold text-white truncate">{user.displayName}</span>
+                                        <i className="fa-solid fa-ban text-red-500 text-xs"></i>
+                                    </div>
+                                    <p className="text-xs text-gray-500 truncate mb-1">{user.email}</p>
+                                    <p className="text-xs text-gray-400 mb-2">
+                                        <i className="fa-solid fa-circle-exclamation mr-1"></i>
+                                        {user.reason}
+                                    </p>
+                                    {user.bannedAt && (
+                                        <p className="text-xs text-gray-600 mb-2">
+                                            {new Date(user.bannedAt.toDate()).toLocaleDateString('es-ES', {
+                                                day: 'numeric',
+                                                month: 'short',
+                                                year: 'numeric',
+                                                hour: '2-digit',
+                                                minute: '2-digit'
+                                            })}
+                                        </p>
+                                    )}
+                                    <button
+                                        onClick={() => handleUnbanUser(user.uid)}
+                                        className="px-3 py-1.5 bg-green-500/10 hover:bg-green-500/20 text-green-500 rounded-lg text-xs font-medium transition-colors flex items-center gap-2"
+                                    >
+                                        <i className="fa-solid fa-unlock"></i>
+                                        Desbanear
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))
+                )}
+            </div>
+        )}
       </div>
 
       {/* CHAT AREA (Desktop: Always Visible, Mobile: Conditional) */}

@@ -519,7 +519,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
         updatedBy: currentUserEmail
       }, { merge: true });
       
-      await logAdminAction('SETTINGS_UPDATE', undefined, `${key} set to ${newValue}`);
+      await logAdminAction('SETTINGS_UPDATE', undefined, `${String(key)} set to ${newValue}`);
     } catch (error) {
       console.error("Error updating settings:", error);
       setSettings(prev => ({ ...prev, [key]: !newValue })); // Revert on error
@@ -1247,7 +1247,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
 
         {/* === SUPPORT TICKETS TAB === */}
         {activeTab === 'support' && (
-            <SupportTicketsPanel currentUser={currentUser} isAdmin={true} />
+            <SupportTicketsPanel currentUser={currentUserEmail} isAdmin={true} />
         )}
 
         {/* === CONTENT LIBRARY TAB === */}
