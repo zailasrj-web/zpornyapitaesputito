@@ -1266,6 +1266,13 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   useEffect(() => {
     if (!currentUser) return;
 
+    console.log('🎫 Selected contact changed:', {
+      id: selectedContact.id,
+      name: selectedContact.name,
+      isSupportTicket: selectedContact.isSupportTicket,
+      avatar: selectedContact.avatar
+    });
+
     // Reset message limit when changing chats
     setMessageLimit(50);
     setHasMoreOldMessages(false);
