@@ -964,6 +964,14 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         const ticketId = doc.id;
         const userId = data.userId || '';
         
+        console.log('📋 Ticket data:', {
+          ticketId,
+          userDisplayName: data.userDisplayName,
+          username: data.username,
+          userPhotoURL: data.userPhotoURL,
+          fullData: data
+        });
+        
         tickets.push({
           id: `ticket_${ticketId}`,
           name: `Ticket: ${data.userDisplayName || data.username || 'Usuario'}`,
@@ -1268,6 +1276,11 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         const ticketId = selectedContact.id.replace('ticket_', '');
         collectionRef = collection(db, "supportTickets", ticketId, "messages");
         chatId = selectedContact.id;
+        console.log('🎫 Loading ticket messages:', {
+          ticketId,
+          isSupportTicket: selectedContact.isSupportTicket,
+          path: `supportTickets/${ticketId}/messages`
+        });
     } else if (selectedContact.id === GENERAL_CHAT_ID) {
         chatId = GENERAL_CHAT_ID;
         collectionRef = collection(db, "chats", GENERAL_CHAT_ID, "messages");
@@ -1284,6 +1297,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     const q = query(collectionRef, orderBy(orderByField, "desc"), limit(messageLimit));
 
     const unsubscribe = onSnapshot(q, async (snapshot) => {
+      console.log('💬 Loading messages for ticket, count:', snapshot.docs.length);
+      
       const msgs: Message[] = [];
       const now = new Date();
       
@@ -1294,6 +1309,16 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
       
       snapshot.docs.forEach((docSnapshot) => {
         const data = docSnapshot.data() as any;
+        
+        console.log('📨 Message data:', {
+          id: docSnapshot.id,
+          text: data.text,
+          senderId: data.senderId,
+          senderUid: data.senderUid,
+          timestamp: data.timestamp,
+          createdAt: data.createdAt,
+          isAdmin: data.isAdmin
+        });
         
         // Check if message has expired (24 hours for System messages)
         if (data.expiresAt && data.type === 'system') {
