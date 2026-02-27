@@ -1,0 +1,16 @@
+{
+  "enabled": true,
+  "name": "Auto Git Push",
+  "description": "Automáticamente hace commit y push a GitHub cuando se guardan cambios en archivos",
+  "version": "1",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [
+      "*"
+    ]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "git add . && git commit -m 'Auto update: changes saved' && git push"
+  }
+}

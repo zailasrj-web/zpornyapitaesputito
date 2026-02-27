@@ -2546,6 +2546,21 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
               // Delete from my inbox
               await deleteDoc(doc(db, "users", currentUser.uid, "active_chats", chatId));
               
+              // Delete all messages from the chat (historial)
+              try {
+                  const messagesRef = collection(db, "chats", chatId, "messages");
+                  const messagesSnapshot = await getDocs(messagesRef);
+                  const batch = writeBatch(db);
+                  
+                  messagesSnapshot.forEach((messageDoc) => {
+                      batch.delete(messageDoc.ref);
+                  });
+                  
+                  await batch.commit();
+              } catch (error) {
+                  console.error("Error deleting messages:", error);
+              }
+              
               // After 3 seconds, delete from other user's inbox too
               setTimeout(async () => {
                   try {
