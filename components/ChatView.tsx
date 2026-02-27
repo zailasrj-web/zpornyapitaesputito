@@ -584,7 +584,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         ticketStatus: 'open'
       });
       
-      setIsChatBanned(false); // Temporarily allow access to view the ticket
+      // Don't change isChatBanned, just show the ticket
       setShowMobileList(false); // Show chat on mobile
     } catch (error) {
       console.error('Error creating/finding support ticket:', error);
@@ -2959,13 +2959,134 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   return (
     <div className="flex flex-1 h-full max-w-7xl mx-auto bg-black md:bg-[#0A0A0A] md:border border-white/10 md:rounded-2xl overflow-hidden shadow-2xl relative font-sans">
       
-      {/* Show Banned View if user is banned */}
-      {isChatBanned && !isAdminOrOwner && (
+      {/* Show Banned View if user is banned AND not viewing a support ticket */}
+      {isChatBanned && !isAdminOrOwner && !selectedContact.isSupportTicket && (
         <ChatBannedView 
           reason={chatBanReason}
           onContactSupport={handleContactSupport}
           hasActiveTicket={hasActiveTicket}
         />
+      )}
+      
+      {/* Show Support Ticket Chat if user is banned but viewing ticket */}
+      {isChatBanned && !isAdminOrOwner && selectedContact.isSupportTicket && (
+        <>
+          {/* CHAT AREA ONLY (No Sidebar for banned users) */}
+          <div className="flex flex-1 flex-col bg-black relative">
+            
+            {/* Ban Warning Banner */}
+            <div className="bg-red-900/20 border-b border-red-600/30 px-4 py-2">
+              <div className="flex items-center gap-2 text-xs text-red-200">
+                <i className="fa-solid fa-circle-exclamation text-red-400"></i>
+                <span>Estás baneado del chat. Este es tu ticket de soporte para apelar el ban.</span>
+              </div>
+            </div>
+            
+            {/* Chat Header */}
+            <div className="p-3 md:p-4 border-b border-white/5 flex items-center justify-between bg-[#0A0A0A] sticky top-0 z-20 backdrop-blur-md bg-opacity-95">
+              <div className="flex items-center gap-2 md:gap-3 flex-1 min-w-0">
+                <div className="relative flex-shrink-0">
+                  <img src={selectedContact.avatar} className="w-10 h-10 md:w-11 md:h-11 rounded-full object-cover ring-2 ring-accent/30" alt="Support" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-sm md:text-base font-bold text-white flex items-center gap-2 truncate">
+                    <span className="truncate">{selectedContact.name}</span>
+                    <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-500 text-xs font-bold rounded-full flex items-center gap-1">
+                      <i className="fa-solid fa-ticket"></i>
+                      {selectedContact.ticketStatus === 'open' ? 'Abierto' : 'En Progreso'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-yellow-500 truncate">
+                    Ticket de soporte - Responderemos pronto
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Messages Area */}
+            <div className="flex-1 overflow-y-auto p-2 md:p-3 space-y-2 md:space-y-3 bg-chat-pattern bg-repeat relative">
+              <div className="absolute inset-0 bg-black/90 pointer-events-none"></div>
+              
+              {messages.length === 0 && (
+                <div className="relative z-10 text-center py-12">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-accent/10 flex items-center justify-center">
+                    <i className="fa-solid fa-headset text-2xl text-accent"></i>
+                  </div>
+                  <p className="text-gray-400 text-sm">Inicia la conversación con el equipo de soporte</p>
+                  <p className="text-gray-500 text-xs mt-2">Explica tu situación y espera una respuesta</p>
+                </div>
+              )}
+              
+              {messages.map((msg) => {
+                const isMe = msg.senderUid === currentUser?.uid;
+                const isSystem = msg.type === 'system';
+                const isAdminMsg = msg.type === 'admin_log';
+
+                if (isSystem) {
+                  return (
+                    <div key={msg.id} className="relative z-10 flex justify-center my-4">
+                      <div className="bg-white/5 border border-white/10 rounded-xl px-4 py-2 max-w-md">
+                        <p className="text-xs text-gray-400 text-center">{msg.text}</p>
+                      </div>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={msg.id} className={`relative z-10 flex gap-2 md:gap-3 ${isMe ? 'flex-row-reverse' : ''}`}>
+                    <img 
+                      src={msg.photoURL || 'https://ui-avatars.com/api/?name=User'} 
+                      className="w-8 h-8 md:w-9 md:h-9 rounded-full object-cover flex-shrink-0 ring-2 ring-white/10"
+                      alt={msg.displayName}
+                    />
+                    <div className={`flex-1 max-w-[75%] md:max-w-[60%] ${isMe ? 'items-end' : 'items-start'} flex flex-col`}>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-xs font-semibold text-gray-400">
+                          {msg.displayName}
+                          {isAdminMsg && (
+                            <span className="ml-1 text-[10px] bg-accent/20 text-accent px-1.5 py-0.5 rounded">
+                              ADMIN
+                            </span>
+                          )}
+                        </span>
+                      </div>
+                      <div className={`rounded-2xl px-3 md:px-4 py-2 md:py-2.5 ${
+                        isMe 
+                          ? 'bg-accent text-white' 
+                          : isAdminMsg
+                            ? 'bg-blue-600/20 border border-blue-500/30 text-white'
+                            : 'bg-white/5 text-white border border-white/10'
+                      }`}>
+                        <p className="text-sm whitespace-pre-wrap break-words">{msg.text}</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Area */}
+            <div className="p-3 md:p-4 bg-[#0A0A0A] border-t border-white/5 relative backdrop-blur-md bg-opacity-95">
+              <form onSubmit={handleSendMessage} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={inputText}
+                  onChange={(e) => setInputText(e.target.value)}
+                  placeholder="Escribe tu mensaje al equipo de soporte..."
+                  className="flex-1 bg-[#151515] border border-white/10 rounded-full px-4 py-3 text-white text-sm focus:outline-none focus:border-accent transition-all"
+                />
+                <button
+                  type="submit"
+                  disabled={!inputText.trim()}
+                  className="ml-2 text-accent hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 hover:scale-110 active:scale-95 p-2 hover:bg-accent/10 rounded-full"
+                >
+                  <i className="fa-solid fa-paper-plane text-base"></i>
+                </button>
+              </form>
+            </div>
+          </div>
+        </>
       )}
       
       {/* Show Isolated Chat if user is isolated */}
