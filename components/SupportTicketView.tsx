@@ -80,13 +80,22 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
         );
 
         const unsubscribe = onSnapshot(q, async (snapshot) => {
+          console.log('🎫 USER: Checking for existing tickets, found:', snapshot.docs.length);
+          
           if (!snapshot.empty) {
             // Use existing ticket
             const existingTicket = snapshot.docs[0];
+            const ticketData = existingTicket.data();
+            
+            console.log('🎫 USER: Using existing ticket:', {
+              ticketId: existingTicket.id,
+              status: ticketData.status,
+              userPhotoURL: ticketData.userPhotoURL
+            });
+            
             setTicketId(existingTicket.id);
             
             // Update ticket with current photo if it's different
-            const ticketData = existingTicket.data();
             const currentPhotoURL = currentUser.photoURL || '';
             
             if (currentPhotoURL && ticketData.userPhotoURL !== currentPhotoURL) {
@@ -95,6 +104,8 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
               });
             }
           } else {
+            console.log('🎫 USER: Creating new ticket');
+            
             // Create new ticket
             const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
             const userData = userDoc.exists() ? userDoc.data() : {};
@@ -102,6 +113,12 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
             
             // Get the real photo URL from Firebase Auth (prioritize this over Firestore)
             const realPhotoURL = currentUser.photoURL || userData.photoURL || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`;
+            
+            console.log('🎫 USER: New ticket data:', {
+              username,
+              realPhotoURL,
+              email: currentUser.email
+            });
             
             // Update user's photoURL in Firestore if it's using ui-avatars but we have a real photo
             if (currentUser.photoURL && (!userData.photoURL || userData.photoURL.includes('ui-avatars'))) {
@@ -124,6 +141,8 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
               createdAt: serverTimestamp(),
               lastMessageAt: serverTimestamp()
             });
+            
+            console.log('🎫 USER: Created ticket with ID:', newTicket.id);
             setTicketId(newTicket.id);
           }
           setLoading(false);
@@ -143,16 +162,29 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
   useEffect(() => {
     if (!ticketId) return;
 
+    console.log('🎫 USER: Listening to messages for ticket:', ticketId);
+
     const q = query(
       collection(db, 'supportTickets', ticketId, 'messages'),
       orderBy('timestamp', 'asc')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs: Message[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Message));
+      console.log('🎫 USER: Received messages:', snapshot.docs.length);
+      
+      const msgs: Message[] = snapshot.docs.map(doc => {
+        const data = doc.data();
+        console.log('📨 USER message:', {
+          id: doc.id,
+          text: data.text,
+          senderId: data.senderId,
+          timestamp: data.timestamp
+        });
+        return {
+          id: doc.id,
+          ...data
+        } as Message;
+      });
       setMessages(msgs);
     });
 
@@ -161,6 +193,8 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !ticketId) return;
+
+    console.log('🎫 USER: Sending message to ticket:', ticketId);
 
     try {
       // Get user's current photo (prioritize Firebase Auth photo)
@@ -177,6 +211,8 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
         isAdmin: false
       });
 
+      console.log('✅ USER: Message sent successfully');
+
       // Update ticket last message time and photo
       await updateDoc(doc(db, 'supportTickets', ticketId), {
         lastMessageAt: serverTimestamp(),
@@ -185,7 +221,7 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
 
       setNewMessage('');
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('❌ USER: Error sending message:', error);
     }
   };
 

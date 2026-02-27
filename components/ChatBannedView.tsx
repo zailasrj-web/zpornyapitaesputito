@@ -3,9 +3,10 @@ import React from 'react';
 interface ChatBannedViewProps {
   reason?: string;
   onContactSupport: () => void;
+  hasActiveTicket?: boolean;
 }
 
-const ChatBannedView: React.FC<ChatBannedViewProps> = ({ reason, onContactSupport }) => {
+const ChatBannedView: React.FC<ChatBannedViewProps> = ({ reason, onContactSupport, hasActiveTicket }) => {
   return (
     <div className="relative h-full flex items-center justify-center p-6">
       {/* Blurred Background */}
@@ -42,12 +43,14 @@ const ChatBannedView: React.FC<ChatBannedViewProps> = ({ reason, onContactSuppor
           className="w-full px-6 py-4 bg-gradient-to-r from-accent to-accent-hover text-white font-bold rounded-xl transition-all hover:shadow-lg hover:shadow-accent/20 flex items-center justify-center gap-2"
         >
           <i className="fa-solid fa-headset"></i>
-          Contact Support
+          {hasActiveTicket ? 'Ver Ticket de Soporte' : 'Contact Support'}
         </button>
 
         {/* Info Text */}
         <p className="text-xs text-gray-500 mt-4">
-          If you believe this is a mistake, please contact our support team
+          {hasActiveTicket 
+            ? 'Ya tienes un ticket abierto. Haz clic para continuar la conversación con el equipo de soporte.'
+            : 'If you believe this is a mistake, please contact our support team'}
         </p>
       </div>
     </div>

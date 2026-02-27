@@ -352,6 +352,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   const [chatBanReason, setChatBanReason] = useState('');
   const [bannedByAdminId, setBannedByAdminId] = useState<string | null>(null);
   const [showSupportTicket, setShowSupportTicket] = useState(false);
+  const [hasActiveTicket, setHasActiveTicket] = useState(false);
 
   // Isolation State
   const [isIsolated, setIsIsolated] = useState(false);
@@ -526,8 +527,68 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
   };
 
   // Handle Contact Support
-  const handleContactSupport = () => {
-    setShowSupportTicket(true);
+  const handleContactSupport = async () => {
+    if (!currentUser) return;
+    
+    // Find or create support ticket
+    try {
+      const ticketsRef = collection(db, 'supportTickets');
+      const q = query(
+        ticketsRef,
+        where('userId', '==', currentUser.uid),
+        where('status', '==', 'open')
+      );
+      
+      const snapshot = await getDocs(q);
+      let ticketId;
+      
+      if (!snapshot.empty) {
+        // Use existing ticket
+        ticketId = snapshot.docs[0].id;
+        console.log('📋 Using existing support ticket:', ticketId);
+      } else {
+        // Create new ticket
+        const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+        const userData = userDoc.exists() ? userDoc.data() : {};
+        const username = userData.username || currentUser.displayName || 'User';
+        const realPhotoURL = currentUser.photoURL || userData.photoURL || `https://ui-avatars.com/api/?name=${username}`;
+        
+        const newTicket = await addDoc(ticketsRef, {
+          userId: currentUser.uid,
+          userEmail: currentUser.email,
+          userDisplayName: username,
+          username: username,
+          userPhotoURL: realPhotoURL,
+          assignedAdminId: bannedByAdminId || null,
+          status: 'open',
+          reason: 'Chat ban appeal',
+          message: 'Solicitud de apelación de baneo del chat',
+          createdAt: serverTimestamp(),
+          lastMessageAt: serverTimestamp()
+        });
+        
+        ticketId = newTicket.id;
+        console.log('📋 Created new support ticket:', ticketId);
+      }
+      
+      // Set the ticket as selected contact
+      setSelectedContact({
+        id: `ticket_${ticketId}`,
+        name: 'Soporte - Apelación de Ban',
+        avatar: 'https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png',
+        status: 'online',
+        lastMessage: 'Ticket de soporte',
+        time: 'Ahora',
+        unread: 0,
+        isSupportTicket: true,
+        ticketStatus: 'open'
+      });
+      
+      setIsChatBanned(false); // Temporarily allow access to view the ticket
+      setShowMobileList(false); // Show chat on mobile
+    } catch (error) {
+      console.error('Error creating/finding support ticket:', error);
+    }
   };
 
   // Unban User (for admins)
@@ -845,7 +906,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     if (!currentUser) return;
 
     const userRef = doc(db, 'users', currentUser.uid);
-    const unsubscribe = onSnapshot(userRef, (docSnap) => {
+    const unsubscribe = onSnapshot(userRef, async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
         
@@ -854,10 +915,21 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           setIsChatBanned(true);
           setChatBanReason(data.chatBanReason || 'Violación de normas del chat');
           setBannedByAdminId(data.chatBannedBy || null);
+          
+          // Check if user has an active support ticket
+          const ticketsRef = collection(db, 'supportTickets');
+          const q = query(
+            ticketsRef,
+            where('userId', '==', currentUser.uid),
+            where('status', '==', 'open')
+          );
+          const ticketSnapshot = await getDocs(q);
+          setHasActiveTicket(!ticketSnapshot.empty);
         } else {
           setIsChatBanned(false);
           setChatBanReason('');
           setBannedByAdminId(null);
+          setHasActiveTicket(false);
         }
         
         // Check isolation
@@ -2892,6 +2964,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         <ChatBannedView 
           reason={chatBanReason}
           onContactSupport={handleContactSupport}
+          hasActiveTicket={hasActiveTicket}
         />
       )}
       
@@ -4389,15 +4462,6 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           onClose={() => setShowUserProfile(false)}
           onStartChat={handleStartChatFromProfile}
           onReport={handleReportFromProfile}
-        />
-      )}
-
-      {/* Support Ticket Modal */}
-      {showSupportTicket && currentUser && (
-        <SupportTicketView
-          currentUser={currentUser}
-          bannedByAdminId={bannedByAdminId || undefined}
-          onClose={() => setShowSupportTicket(false)}
         />
       )}
 
