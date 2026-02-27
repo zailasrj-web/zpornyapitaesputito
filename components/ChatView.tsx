@@ -2315,10 +2315,20 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
         displayName: currentUser.displayName || "Anonymous",
         photoURL: currentUser.photoURL || `https://ui-avatars.com/api/?name=${currentUser.email}`,
         email: currentUser.email,
-        createdAt: serverTimestamp(),
         read: false,
         type: 'text'
       };
+      
+      // Use 'timestamp' for support tickets, 'createdAt' for regular chats
+      if (selectedContact.id.startsWith('ticket_')) {
+        msgData.timestamp = serverTimestamp();
+        msgData.senderId = currentUser.uid;
+        msgData.senderName = currentUser.displayName || "Admin";
+        msgData.senderAvatar = currentUser.photoURL || '';
+        msgData.isAdmin = true;
+      } else {
+        msgData.createdAt = serverTimestamp();
+      }
 
       // Add reply data if replying to a message
       if (replyingTo) {
@@ -2337,7 +2347,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
 
       const displayMessage = content.imageUrl ? "Sent an image 📷" : content.text;
 
-      if (selectedContact.id !== GENERAL_CHAT_ID) {
+      // Don't update inbox for support tickets
+      if (selectedContact.id !== GENERAL_CHAT_ID && !selectedContact.id.startsWith('ticket_')) {
           const myInboxRef = doc(db, "users", currentUser.uid, "active_chats", chatId);
           await setDoc(myInboxRef, {
               partnerId: selectedContact.id,

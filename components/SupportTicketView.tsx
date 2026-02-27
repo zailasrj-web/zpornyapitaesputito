@@ -84,13 +84,23 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
             // Use existing ticket
             const existingTicket = snapshot.docs[0];
             setTicketId(existingTicket.id);
+            
+            // Update ticket with current photo if it's different
+            const ticketData = existingTicket.data();
+            const currentPhotoURL = currentUser.photoURL || '';
+            
+            if (currentPhotoURL && ticketData.userPhotoURL !== currentPhotoURL) {
+              await updateDoc(doc(db, 'supportTickets', existingTicket.id), {
+                userPhotoURL: currentPhotoURL
+              });
+            }
           } else {
             // Create new ticket
             const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
             const userData = userDoc.exists() ? userDoc.data() : {};
             const username = userData.username || currentUser.displayName || 'User';
             
-            // Get the real photo URL from Firebase Auth
+            // Get the real photo URL from Firebase Auth (prioritize this over Firestore)
             const realPhotoURL = currentUser.photoURL || userData.photoURL || `https://ui-avatars.com/api/?name=${username}&background=6366f1&color=fff&size=200&bold=true`;
             
             // Update user's photoURL in Firestore if it's using ui-avatars but we have a real photo
@@ -153,18 +163,24 @@ const SupportTicketView: React.FC<SupportTicketViewProps> = ({
     if (!newMessage.trim() || !ticketId) return;
 
     try {
+      // Get user's current photo (prioritize Firebase Auth photo)
+      const userDoc = await getDoc(doc(db, 'users', currentUser.uid));
+      const userData = userDoc.exists() ? userDoc.data() : {};
+      const photoURL = currentUser.photoURL || userData.photoURL || '';
+      
       await addDoc(collection(db, 'supportTickets', ticketId, 'messages'), {
         text: newMessage,
         senderId: currentUser.uid,
         senderName: currentUser.displayName || 'User',
-        senderAvatar: currentUser.photoURL || '',
+        senderAvatar: photoURL,
         timestamp: serverTimestamp(),
         isAdmin: false
       });
 
-      // Update ticket last message time
+      // Update ticket last message time and photo
       await updateDoc(doc(db, 'supportTickets', ticketId), {
-        lastMessageAt: serverTimestamp()
+        lastMessageAt: serverTimestamp(),
+        userPhotoURL: photoURL // Update photo in case it changed
       });
 
       setNewMessage('');
