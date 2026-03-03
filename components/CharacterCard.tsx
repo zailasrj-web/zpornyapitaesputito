@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Character } from '../types';
 
 interface CharacterCardProps {
@@ -27,12 +28,23 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
   onToggleFavorite
 }) => {
   const [showMenu, setShowMenu] = useState(false);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   
   // Check if current user can delete (owner or admin)
   const canDelete = isAdmin || (currentUserId && character.authorId === currentUserId);
 
   const handleMenuClick = (e: React.MouseEvent) => {
     e.stopPropagation();
+    
+    // Calculate menu position
+    const button = e.currentTarget as HTMLElement;
+    const rect = button.getBoundingClientRect();
+    
+    setMenuPosition({
+      top: rect.bottom + 4,
+      left: rect.right - 192 // 192px = w-48 (12rem)
+    });
+    
     setShowMenu(!showMenu);
   };
 
@@ -101,84 +113,91 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
           >
             <i className="fa-solid fa-ellipsis text-white text-sm"></i>
           </button>
-          
-          {/* Dropdown Menu */}
-          {showMenu && (
-            <>
-              <div 
-                className="fixed inset-0 z-40" 
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                }}
-              />
-              <div className="absolute right-0 mt-1 w-48 bg-[#1a1a1a] rounded-lg shadow-2xl border border-white/10 overflow-hidden z-50 animate-[fadeIn_0.1s_ease-out]">
-                
-                {/* Report - Always visible */}
-                <button
-                  onClick={handleReport}
-                  className="w-full py-3 px-4 text-left text-red-500 font-bold hover:bg-white/5 transition-colors border-b border-white/10"
-                >
-                  Report
-                </button>
-                
-                {/* Save to Favorites */}
-                {onToggleFavorite && (
-                  <button
-                    onClick={handleToggleFavorite}
-                    className="w-full py-3 px-4 text-left text-accent text-sm font-medium hover:bg-white/5 transition-colors border-b border-white/10 flex items-center gap-2"
-                  >
-                    <i className="fa-solid fa-heart text-xs"></i>
-                    Save to Favorites
-                  </button>
-                )}
-                
-                {/* User Options */}
-                <button
-                  onClick={handleNotInterested}
-                  className="w-full py-3 px-4 text-left text-white text-sm hover:bg-white/5 transition-colors border-b border-white/10"
-                >
-                  Not interested
-                </button>
-                
-                <button
-                  onClick={handleCopyLink}
-                  className="w-full py-3 px-4 text-left text-white text-sm hover:bg-white/5 transition-colors border-b border-white/10"
-                >
-                  Copy link
-                </button>
-                
-                {/* Admin Controls */}
-                {isAdmin && (
-                  <>
-                    <div className="bg-white/5 px-2 py-1 text-[9px] text-gray-500 font-bold text-center uppercase tracking-widest border-b border-white/10">
-                      Admin
-                    </div>
-                    
-                    <button
-                      onClick={handleHide}
-                      className="w-full py-2.5 px-4 text-left text-yellow-400 text-sm font-medium hover:bg-white/5 transition-colors border-b border-white/10 flex items-center gap-2"
-                    >
-                      <i className="fa-regular fa-eye-slash text-xs"></i>
-                      Hide
-                    </button>
-                  </>
-                )}
-                
-                {/* Delete - Owner or Admin */}
-                {canDelete && (
-                  <button
-                    onClick={handleDelete}
-                    className="w-full py-2.5 px-4 text-left text-red-400 text-sm font-medium hover:bg-white/5 transition-colors flex items-center gap-2"
-                  >
-                    <i className="fa-regular fa-trash-can text-xs"></i>
-                    Delete
-                  </button>
-                )}
-              </div>
-            </>
-          )}
         </div>
+      )}
+
+      {/* Dropdown Menu - Rendered via Portal */}
+      {showMenu && createPortal(
+        <>
+          <div 
+            className="fixed inset-0 z-[9998]" 
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowMenu(false);
+            }}
+          />
+          <div 
+            className="fixed w-48 bg-[#1a1a1a] rounded-lg shadow-2xl border border-white/10 overflow-hidden z-[9999] animate-[fadeIn_0.1s_ease-out]"
+            style={{
+              top: `${menuPosition.top}px`,
+              left: `${menuPosition.left}px`,
+            }}
+          >
+            
+            {/* Report - Always visible */}
+            <button
+              onClick={handleReport}
+              className="w-full py-3 px-4 text-left text-red-500 font-bold hover:bg-white/5 transition-colors border-b border-white/10"
+            >
+              Report
+            </button>
+            
+            {/* Save to Favorites */}
+            {onToggleFavorite && (
+              <button
+                onClick={handleToggleFavorite}
+                className="w-full py-3 px-4 text-left text-accent text-sm font-medium hover:bg-white/5 transition-colors border-b border-white/10 flex items-center gap-2"
+              >
+                <i className="fa-solid fa-heart text-xs"></i>
+                Save to Favorites
+              </button>
+            )}
+            
+            {/* User Options */}
+            <button
+              onClick={handleNotInterested}
+              className="w-full py-3 px-4 text-left text-white text-sm hover:bg-white/5 transition-colors border-b border-white/10"
+            >
+              Not interested
+            </button>
+            
+            <button
+              onClick={handleCopyLink}
+              className="w-full py-3 px-4 text-left text-white text-sm hover:bg-white/5 transition-colors border-b border-white/10"
+            >
+              Copy link
+            </button>
+            
+            {/* Admin Controls */}
+            {isAdmin && (
+              <>
+                <div className="bg-white/5 px-2 py-1 text-[9px] text-gray-500 font-bold text-center uppercase tracking-widest border-b border-white/10">
+                  Admin
+                </div>
+                
+                <button
+                  onClick={handleHide}
+                  className="w-full py-2.5 px-4 text-left text-yellow-400 text-sm font-medium hover:bg-white/5 transition-colors border-b border-white/10 flex items-center gap-2"
+                >
+                  <i className="fa-regular fa-eye-slash text-xs"></i>
+                  Hide
+                </button>
+              </>
+            )}
+            
+            {/* Delete - Owner or Admin */}
+            {canDelete && (
+              <button
+                onClick={handleDelete}
+                className="w-full py-2.5 px-4 text-left text-red-400 text-sm font-medium hover:bg-white/5 transition-colors flex items-center gap-2"
+              >
+                <i className="fa-regular fa-trash-can text-xs"></i>
+                Delete
+              </button>
+            )}
+          </div>
+        </>,
+        document.body
       )}
 
       {/* Play Icon Overlay */}
