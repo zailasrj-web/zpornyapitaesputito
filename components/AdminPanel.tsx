@@ -109,6 +109,16 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     filterNSFW: true,
     requireEmailVerification: true
   });
+  
+  // Weekly Challenge State
+  const [challengeSettings, setChallengeSettings] = useState({
+    enabled: false,
+    title: 'Neon Nights',
+    description: 'Create a video featuring urban nightlife with neon aesthetics.',
+    prize: 500,
+    emoji: '🌃'
+  });
+  const [savingChallenge, setSavingChallenge] = useState(false);
 
   // Load Real Data
   useEffect(() => {
@@ -265,6 +275,21 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
           allowSignups: data.allowSignups !== false,
           filterNSFW: data.filterNSFW !== false,
           requireEmailVerification: data.requireEmailVerification !== false
+        });
+      }
+      
+      // Load Weekly Challenge settings
+      const challengeRef = doc(db, "platformSettings", "weeklyChallenge");
+      const challengeDoc = await getDoc(challengeRef);
+      
+      if (challengeDoc.exists()) {
+        const data = challengeDoc.data();
+        setChallengeSettings({
+          enabled: data.enabled || false,
+          title: data.title || 'Neon Nights',
+          description: data.description || 'Create a video featuring urban nightlife with neon aesthetics.',
+          prize: data.prize || 500,
+          emoji: data.emoji || '🌃'
         });
       }
     } catch (error) {
@@ -523,6 +548,26 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
     } catch (error) {
       console.error("Error updating settings:", error);
       setSettings(prev => ({ ...prev, [key]: !newValue })); // Revert on error
+    }
+  };
+  
+  const saveWeeklyChallenge = async () => {
+    setSavingChallenge(true);
+    try {
+      const challengeRef = doc(db, "platformSettings", "weeklyChallenge");
+      await setDoc(challengeRef, {
+        ...challengeSettings,
+        updatedAt: serverTimestamp(),
+        updatedBy: currentUserEmail
+      });
+      
+      await logAdminAction('CHALLENGE_UPDATE', undefined, `Weekly Challenge updated: ${challengeSettings.title}`);
+      alert('Weekly Challenge saved successfully!');
+    } catch (error) {
+      console.error("Error saving challenge:", error);
+      alert('Error saving challenge');
+    } finally {
+      setSavingChallenge(false);
     }
   };
 
@@ -1395,6 +1440,90 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                         >
                             <div className={`w-4 h-4 rounded-full bg-white transition-transform ${settings.filterNSFW ? 'translate-x-6' : 'translate-x-0'}`}></div>
                         </button>
+                    </div>
+                    
+                    {/* Weekly Challenge Configuration */}
+                    <div className="pt-6 border-t border-white/5">
+                        <h4 className="text-white font-bold mb-4 flex items-center gap-2">
+                            <i className="fa-solid fa-trophy text-accent"></i>
+                            Weekly Challenge
+                        </h4>
+                        
+                        <div className="space-y-4 bg-white/5 p-4 rounded-lg">
+                            {/* Enable/Disable Toggle */}
+                            <div className="flex items-center justify-between pb-4 border-b border-white/5">
+                                <div>
+                                    <h5 className="text-white font-semibold text-sm">Enable Weekly Challenge</h5>
+                                    <p className="text-xs text-gray-500 mt-1">Show challenge widget on the homepage</p>
+                                </div>
+                                <button 
+                                    onClick={() => setChallengeSettings(prev => ({ ...prev, enabled: !prev.enabled }))}
+                                    className={`w-12 h-6 rounded-full p-1 transition-colors ${challengeSettings.enabled ? 'bg-accent' : 'bg-gray-700'}`}
+                                >
+                                    <div className={`w-4 h-4 rounded-full bg-white transition-transform ${challengeSettings.enabled ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                </button>
+                            </div>
+                            
+                            {/* Challenge Details */}
+                            <div className="space-y-3">
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-400 block mb-1.5">Challenge Title</label>
+                                    <input 
+                                        type="text"
+                                        value={challengeSettings.title}
+                                        onChange={(e) => setChallengeSettings(prev => ({ ...prev, title: e.target.value }))}
+                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-accent focus:outline-none"
+                                        placeholder="e.g. Neon Nights"
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-400 block mb-1.5">Emoji</label>
+                                    <input 
+                                        type="text"
+                                        value={challengeSettings.emoji}
+                                        onChange={(e) => setChallengeSettings(prev => ({ ...prev, emoji: e.target.value }))}
+                                        className="w-20 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-accent focus:outline-none text-center"
+                                        placeholder="🌃"
+                                        maxLength={2}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-400 block mb-1.5">Description</label>
+                                    <textarea 
+                                        value={challengeSettings.description}
+                                        onChange={(e) => setChallengeSettings(prev => ({ ...prev, description: e.target.value }))}
+                                        className="w-full bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-accent focus:outline-none resize-none h-20"
+                                        placeholder="Describe the challenge..."
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label className="text-xs font-semibold text-gray-400 block mb-1.5">Prize (Coins)</label>
+                                    <input 
+                                        type="number"
+                                        value={challengeSettings.prize}
+                                        onChange={(e) => setChallengeSettings(prev => ({ ...prev, prize: parseInt(e.target.value) || 0 }))}
+                                        className="w-32 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:border-accent focus:outline-none"
+                                        placeholder="500"
+                                        min="0"
+                                    />
+                                </div>
+                                
+                                <button 
+                                    onClick={saveWeeklyChallenge}
+                                    disabled={savingChallenge}
+                                    className="w-full bg-accent hover:bg-accent-hover text-white font-bold py-2 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+                                >
+                                    {savingChallenge ? (
+                                        <><i className="fa-solid fa-circle-notch fa-spin mr-2"></i>Saving...</>
+                                    ) : (
+                                        'Save Challenge Settings'
+                                    )}
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div className="pt-4 flex justify-end">

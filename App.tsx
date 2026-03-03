@@ -999,7 +999,7 @@ const App: React.FC = () => {
                       Comunícate a soporte abajo el link del Discord
                   </p>
                   <a 
-                      href="https://discord.gg/r3wDycJ3" 
+                      href="https://discord.gg/RaXBWkV8xv" 
                       target="_blank"
                       rel="noopener noreferrer"
                       className="block w-full bg-[#5865F2] hover:bg-[#4752c4] text-white font-bold py-3 px-4 rounded-lg transition-colors text-center"
@@ -1378,7 +1378,13 @@ const App: React.FC = () => {
 
           {currentView === 'community' && (
             user ? (
-              <CommunityView isAdmin={isAdmin} currentUser={user} />
+              <CommunityView 
+                isAdmin={isAdmin} 
+                currentUser={user}
+                onProfileClick={(userId) => {
+                  setViewingProfileId(userId);
+                }}
+              />
             ) : (
               <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-[fadeIn_0.3s_ease-out]">
                 <div className="w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center mb-6">

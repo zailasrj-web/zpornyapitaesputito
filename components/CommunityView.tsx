@@ -14,6 +14,7 @@ import {
   arrayUnion,
   arrayRemove,
   getDocs,
+  getDoc,
   increment
 } from 'firebase/firestore';
 
@@ -50,34 +51,47 @@ interface Post {
 }
 
 interface Creator {
-  id: number;
+  id: string;
   name: string;
   handle: string;
   avatar: string;
-  followers: string;
+  followers: number;
 }
-
-const TRENDING_CREATORS: Creator[] = [
-  { id: 1, name: "Klara S.", handle: "@klara_art", avatar: "https://i.pravatar.cc/150?u=klara", followers: "450K" },
-  { id: 2, name: "DevX", handle: "@dev_x_model", avatar: "https://i.pravatar.cc/150?u=dev", followers: "210K" },
-  { id: 3, name: "SynthWave", handle: "@synth_wave", avatar: "https://i.pravatar.cc/150?u=synth", followers: "180K" },
-];
 
 interface CommunityViewProps {
   isAdmin?: boolean;
   currentUser?: User | any;
+  onProfileClick?: (userId: string) => void;
 }
 
-const CommunityView: React.FC<CommunityViewProps> = ({ isAdmin = false, currentUser }) => {
+const CommunityView: React.FC<CommunityViewProps> = ({ isAdmin = false, currentUser, onProfileClick }) => {
   const [activeTab, setActiveTab] = useState<'feed' | 'events'>('feed');
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Trending Creators State
+  const [trendingCreators, setTrendingCreators] = useState<Creator[]>([]);
+  const [followedCreators, setFollowedCreators] = useState<string[]>([]);
+  
+  // Popular Topics State
+  const [popularTopics, setPopularTopics] = useState<{ tag: string; count: number }[]>([]);
+  
+  // Weekly Challenge State
+  const [weeklyChallenge, setWeeklyChallenge] = useState<{
+    enabled: boolean;
+    title: string;
+    description: string;
+    prize: number;
+    emoji: string;
+  } | null>(null);
   
   // Create Post State
   const [newPostContent, setNewPostContent] = useState('');
   const [newPostMedia, setNewPostMedia] = useState<File | null>(null);
   const [mediaPreview, setMediaPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [uploadToExplore, setUploadToExplore] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Comments State
@@ -106,6 +120,174 @@ const CommunityView: React.FC<CommunityViewProps> = ({ isAdmin = false, currentU
     });
     return () => unsubscribe();
   }, []);
+  
+  // Load Trending Creators
+  useEffect(() => {
+    loadTrendingCreators();
+    if (currentUser) {
+      loadFollowedCreators();
+    }
+  }, [currentUser]);
+  
+  // Load Popular Topics
+  useEffect(() => {
+    loadPopularTopics();
+  }, [posts]);
+  
+  // Load Weekly Challenge
+  useEffect(() => {
+    loadWeeklyChallenge();
+  }, []);
+  
+  const loadFollowedCreators = async () => {
+    if (!currentUser) return;
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userRef);
+      if (userDoc.exists()) {
+        setFollowedCreators(userDoc.data().subscriptions || []);
+      }
+    } catch (error) {
+      console.error('Error loading followed creators:', error);
+    }
+  };
+  
+  const loadTrendingCreators = async () => {
+    try {
+      const usersSnapshot = await getDocs(collection(db, 'users'));
+      const creatorsData: Creator[] = [];
+      
+      console.log('📊 Loading trending creators, total users:', usersSnapshot.docs.length);
+      
+      // First pass: collect all users and count their actual subscribers
+      for (const userDoc of usersSnapshot.docs) {
+        const userData = userDoc.data();
+        
+        // Count actual subscribers by checking how many users have this user in their subscriptions array
+        let actualSubscribersCount = 0;
+        for (const otherUserDoc of usersSnapshot.docs) {
+          const otherUserData = otherUserDoc.data();
+          if (otherUserData.subscriptions && Array.isArray(otherUserData.subscriptions)) {
+            if (otherUserData.subscriptions.includes(userDoc.id)) {
+              actualSubscribersCount++;
+            }
+          }
+        }
+        
+        console.log('User:', userData.displayName || userDoc.id, 
+                    'stored subscribersCount:', userData.subscribersCount, 
+                    'actual subscribers:', actualSubscribersCount);
+        
+        // Include users with videos OR subscribers
+        if ((userData.videosCount && userData.videosCount > 0) || actualSubscribersCount > 0) {
+          creatorsData.push({
+            id: userDoc.id,
+            name: userData.displayName || userData.username || 'User',
+            handle: `@${userData.username || userDoc.id}`,
+            avatar: userData.photoURL || `https://ui-avatars.com/api/?name=${userData.displayName || 'User'}`,
+            followers: actualSubscribersCount // Use actual count
+          });
+          
+          // Update the stored count if it's different
+          if (userData.subscribersCount !== actualSubscribersCount) {
+            await updateDoc(doc(db, 'users', userDoc.id), {
+              subscribersCount: actualSubscribersCount
+            });
+          }
+        }
+      }
+      
+      console.log('✅ Found creators:', creatorsData.length);
+      
+      // Sort by followers count
+      creatorsData.sort((a, b) => b.followers - a.followers);
+      
+      // If no creators found, show top 3 users anyway
+      if (creatorsData.length === 0) {
+        console.log('⚠️ No creators found, showing all users');
+        usersSnapshot.docs.slice(0, 3).forEach(userDoc => {
+          const userData = userDoc.data();
+          creatorsData.push({
+            id: userDoc.id,
+            name: userData.displayName || userData.username || 'User',
+            handle: `@${userData.username || userDoc.id}`,
+            avatar: userData.photoURL || `https://ui-avatars.com/api/?name=${userData.displayName || 'User'}`,
+            followers: 0
+          });
+        });
+      }
+      
+      setTrendingCreators(creatorsData.slice(0, 3));
+    } catch (error) {
+      console.error('Error loading trending creators:', error);
+    }
+  };
+  
+  const loadPopularTopics = () => {
+    const tagCounts: { [key: string]: number } = {};
+    
+    posts.forEach(post => {
+      post.tags?.forEach(tag => {
+        if (tag) {
+          tagCounts[tag] = (tagCounts[tag] || 0) + 1;
+        }
+      });
+    });
+    
+    const sortedTopics = Object.entries(tagCounts)
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 7);
+    
+    setPopularTopics(sortedTopics);
+  };
+  
+  const loadWeeklyChallenge = async () => {
+    try {
+      const challengeRef = doc(db, 'platformSettings', 'weeklyChallenge');
+      const challengeDoc = await getDocs(collection(db, 'platformSettings'));
+      const challengeData = challengeDoc.docs.find(d => d.id === 'weeklyChallenge')?.data();
+      
+      if (challengeData && challengeData.enabled) {
+        setWeeklyChallenge(challengeData as any);
+      }
+    } catch (error) {
+      console.error('Error loading weekly challenge:', error);
+    }
+  };
+  
+  const handleFollow = async (creatorId: string) => {
+    if (!currentUser) {
+      alert('Please login to follow creators');
+      return;
+    }
+    
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      const creatorRef = doc(db, 'users', creatorId);
+      const isFollowing = followedCreators.includes(creatorId);
+      
+      if (isFollowing) {
+        await updateDoc(userRef, { subscriptions: arrayRemove(creatorId) });
+        await updateDoc(creatorRef, { subscribersCount: increment(-1) });
+        setFollowedCreators(prev => prev.filter(id => id !== creatorId));
+      } else {
+        await updateDoc(userRef, { subscriptions: arrayUnion(creatorId) });
+        await updateDoc(creatorRef, { subscribersCount: increment(1) });
+        setFollowedCreators(prev => [...prev, creatorId]);
+      }
+      
+      loadTrendingCreators();
+    } catch (error) {
+      console.error('Error following/unfollowing:', error);
+    }
+  };
+  
+  const formatCount = (count: number): string => {
+    if (count >= 1000000) return `${(count / 1000000).toFixed(1)}M`;
+    if (count >= 1000) return `${(count / 1000).toFixed(1)}K`;
+    return count.toString();
+  };
 
   // --- 2. FETCH COMMENTS ---
   useEffect(() => {
@@ -171,6 +353,8 @@ const CommunityView: React.FC<CommunityViewProps> = ({ isAdmin = false, currentU
           const cleanName = rawName.replace(/\s+/g, '_');
           const cleanHandle = currentUser.email ? `@${currentUser.email.split('@')[0].replace(/\s+/g, '_')}` : "@user";
 
+          // Determine source based on uploadToExplore flag
+          const postSource = uploadToExplore ? 'explore' : 'community';
 
           await addDoc(collection(db, "posts"), {
               userId: currentUser.uid,
@@ -186,15 +370,16 @@ const CommunityView: React.FC<CommunityViewProps> = ({ isAdmin = false, currentU
               timestamp: serverTimestamp(),
               likes: [],
               commentsCount: 0,
-              tags: tags,
+              tags: uploadToExplore ? [...tags, 'Community'] : tags, // Add Community tag if uploading to explore
               isHidden: false,
-              source: 'community' // Mark as community post - won't appear in Feed/Explore
+              source: postSource // 'community' or 'explore'
           });
 
           // Reset Form
           setNewPostContent('');
           setNewPostMedia(null);
           setMediaPreview(null);
+          setUploadToExplore(false);
           if (fileInputRef.current) fileInputRef.current.value = '';
 
       } catch (error) {
@@ -408,7 +593,7 @@ const CommunityView: React.FC<CommunityViewProps> = ({ isAdmin = false, currentU
             </div>
             <div className="flex gap-3">
                 <a 
-                    href="https://discord.gg/r3wDycJ3" 
+                    href="https://discord.gg/RaXBWkV8xv" 
                     target="_blank" 
                     rel="noopener noreferrer"
                     className="bg-white/10 backdrop-blur-md border border-white/20 text-white font-bold py-3 px-6 rounded-xl hover:bg-white/20 transition-colors flex items-center justify-center"
@@ -459,19 +644,11 @@ const CommunityView: React.FC<CommunityViewProps> = ({ isAdmin = false, currentU
                     </div>
                     <div className="flex justify-between items-center pt-3 border-t border-white/5">
                         <div className="flex gap-2">
-                             <input 
-                                type="file" 
-                                ref={fileInputRef}
-                                accept="image/*,video/*" 
-                                onChange={handleFileChange} 
-                                className="hidden"
-                                id="media-upload"
-                             />
-                             <label htmlFor="media-upload" className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-accent cursor-pointer px-3 py-2 hover:bg-white/5 rounded-lg transition-colors">
+                             <button 
+                                onClick={() => setShowUploadModal(true)}
+                                className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-accent cursor-pointer px-3 py-2 hover:bg-white/5 rounded-lg transition-colors"
+                             >
                                  <i className="fa-regular fa-image text-sm"></i> Media
-                             </label>
-                             <button className="flex items-center gap-2 text-xs font-bold text-gray-400 hover:text-accent cursor-pointer px-3 py-2 hover:bg-white/5 rounded-lg transition-colors">
-                                 <i className="fa-solid fa-wand-magic-sparkles text-sm"></i> Generate
                              </button>
                         </div>
                         <button 
@@ -529,10 +706,20 @@ const CommunityView: React.FC<CommunityViewProps> = ({ isAdmin = false, currentU
                         {/* Post Header */}
                         <div className={`flex justify-between items-start mb-4 ${post.isHidden ? 'mt-6' : ''}`}>
                             <div className="flex items-center gap-3">
-                                <img src={post.user.avatar} alt={post.user.name} className="w-10 h-10 rounded-full object-cover ring-2 ring-black" />
+                                <img 
+                                  src={post.user.avatar} 
+                                  alt={post.user.name} 
+                                  onClick={() => onProfileClick?.(post.userId)}
+                                  className="w-10 h-10 rounded-full object-cover ring-2 ring-black cursor-pointer hover:ring-accent transition-all" 
+                                />
                                 <div>
                                     <div className="flex items-center gap-1.5">
-                                        <h3 className="text-sm font-bold text-white hover:underline cursor-pointer">{post.user.name}</h3>
+                                        <h3 
+                                          onClick={() => onProfileClick?.(post.userId)}
+                                          className="text-sm font-bold text-white hover:underline cursor-pointer"
+                                        >
+                                          {post.user.name}
+                                        </h3>
                                         {post.user.isVerified && <i className="fa-solid fa-circle-check text-accent text-xs"></i>}
                                     </div>
                                     <span className="text-xs text-gray-500">{post.user.handle} · {formatTime(post.timestamp)}</span>
@@ -673,64 +860,141 @@ const CommunityView: React.FC<CommunityViewProps> = ({ isAdmin = false, currentU
         <div className="hidden lg:flex flex-col gap-6">
             
             {/* Weekly Challenge Card */}
-            <div className="bg-gradient-to-br from-[#1a1a1a] to-black border border-accent/30 rounded-2xl p-5 relative overflow-hidden group">
-                <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity">
-                    <i className="fa-solid fa-trophy text-6xl text-accent"></i>
-                </div>
-                <h3 className="text-xs font-bold text-accent uppercase tracking-wider mb-1">Weekly Challenge</h3>
-                <h2 className="text-xl font-bold text-white mb-2">Neon Nights 🌃</h2>
-                <p className="text-xs text-gray-400 mb-4 z-10 relative">Create a video featuring urban nightlife with neon aesthetics.</p>
-                <div className="flex items-center gap-2 mb-4">
-                    <div className="bg-white/10 px-3 py-1 rounded-lg text-xs text-white font-mono border border-white/5">
-                        Prize: <span className="text-yellow-400 font-bold">500 Coins</span>
-                    </div>
-                </div>
-                <button className="w-full bg-accent hover:bg-accent-hover text-white text-xs font-bold py-2.5 rounded-lg transition-colors shadow-lg shadow-purple-900/20">
-                    Join Challenge
-                </button>
-            </div>
+            {weeklyChallenge && (
+              <div className="bg-gradient-to-br from-[#1a1a1a] to-black border border-accent/30 rounded-2xl p-5 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity">
+                      <i className="fa-solid fa-trophy text-6xl text-accent"></i>
+                  </div>
+                  <h3 className="text-xs font-bold text-accent uppercase tracking-wider mb-1">Weekly Challenge</h3>
+                  <h2 className="text-xl font-bold text-white mb-2">{weeklyChallenge.title} {weeklyChallenge.emoji}</h2>
+                  <p className="text-xs text-gray-400 mb-4 z-10 relative">{weeklyChallenge.description}</p>
+                  <div className="flex items-center gap-2 mb-4">
+                      <div className="bg-white/10 px-3 py-1 rounded-lg text-xs text-white font-mono border border-white/5">
+                          Prize: <span className="text-yellow-400 font-bold">{weeklyChallenge.prize} Coins</span>
+                      </div>
+                  </div>
+                  <button className="w-full bg-accent hover:bg-accent-hover text-white text-xs font-bold py-2.5 rounded-lg transition-colors shadow-lg shadow-purple-900/20">
+                      Join Challenge
+                  </button>
+              </div>
+            )}
 
             {/* Trending Creators */}
-            <div className="bg-[#0A0A0A] border border-white/10 rounded-2xl p-5">
-                <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
-                    <i className="fa-solid fa-fire text-orange-500"></i> Trending Creators
-                </h3>
-                <div className="space-y-4">
-                    {TRENDING_CREATORS.map(creator => (
-                        <div key={creator.id} className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <img src={creator.avatar} alt={creator.name} className="w-9 h-9 rounded-full object-cover" />
-                                <div>
-                                    <h4 className="text-xs font-bold text-white">{creator.name}</h4>
-                                    <p className="text-[10px] text-gray-500">{creator.followers} followers</p>
-                                </div>
-                            </div>
-                            <button className="bg-white/5 hover:bg-white/10 text-white text-[10px] font-bold py-1.5 px-3 rounded-lg border border-white/10 transition-colors">
-                                Follow
-                            </button>
-                        </div>
-                    ))}
-                </div>
-                <button className="w-full mt-4 text-xs text-gray-500 hover:text-white transition-colors">
-                    View All Creators
-                </button>
-            </div>
+            {trendingCreators.length > 0 && (
+              <div className="bg-[#0A0A0A] border border-white/10 rounded-2xl p-5">
+                  <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                      <i className="fa-solid fa-fire text-orange-500"></i> Trending Creators
+                  </h3>
+                  <div className="space-y-4">
+                      {trendingCreators.map(creator => {
+                        const isFollowing = followedCreators.includes(creator.id);
+                        const isOwnProfile = currentUser?.uid === creator.id;
+                        
+                        return (
+                          <div key={creator.id} className="flex items-center justify-between">
+                              <div 
+                                className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+                                onClick={() => onProfileClick?.(creator.id)}
+                              >
+                                  <img src={creator.avatar} alt={creator.name} className="w-9 h-9 rounded-full object-cover" />
+                                  <div>
+                                      <h4 className="text-xs font-bold text-white">{creator.name}</h4>
+                                      <p className="text-[10px] text-gray-500">{formatCount(creator.followers)} followers</p>
+                                  </div>
+                              </div>
+                              {!isOwnProfile && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleFollow(creator.id);
+                                  }}
+                                  className={`text-[10px] font-bold py-1.5 px-3 rounded-lg border transition-colors ${
+                                    isFollowing
+                                      ? 'bg-accent/20 hover:bg-accent/30 text-accent border-accent/30'
+                                      : 'bg-white/5 hover:bg-white/10 text-white border-white/10'
+                                  }`}
+                                >
+                                  {isFollowing ? 'Following' : 'Follow'}
+                                </button>
+                              )}
+                          </div>
+                        );
+                      })}
+                  </div>
+              </div>
+            )}
 
             {/* Popular Topics */}
-             <div className="bg-[#0A0A0A] border border-white/10 rounded-2xl p-5">
-                <h3 className="text-sm font-bold text-white mb-4">Popular Topics</h3>
-                <div className="flex flex-wrap gap-2">
-                    {['#StableDiffusion', '#Tutorial', '#Showcase', '#NSFW', '#Anime', '#Realism', '#Video2Video'].map(tag => (
-                        <span key={tag} className="text-[10px] text-gray-400 bg-white/5 hover:bg-white/10 border border-white/5 px-2 py-1 rounded-md cursor-pointer transition-colors">
-                            {tag}
-                        </span>
-                    ))}
-                </div>
-             </div>
+            {popularTopics.length > 0 && (
+              <div className="bg-[#0A0A0A] border border-white/10 rounded-2xl p-5">
+                  <h3 className="text-sm font-bold text-white mb-4">Popular Topics</h3>
+                  <div className="flex flex-wrap gap-2">
+                      {popularTopics.map(({ tag, count }) => (
+                          <span key={tag} className="text-[10px] text-gray-400 bg-white/5 hover:bg-white/10 border border-white/5 px-2 py-1 rounded-md cursor-pointer transition-colors hover:text-white">
+                              #{tag} <span className="text-[9px] text-gray-600">({count})</span>
+                          </span>
+                      ))}
+                  </div>
+              </div>
+            )}
 
         </div>
 
       </div>
+      
+      {/* Upload Media Modal */}
+      {showUploadModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={() => setShowUploadModal(false)} />
+          <div className="relative w-full max-w-md bg-[#0A0A0A] border border-white/10 rounded-2xl p-6 shadow-2xl animate-[scaleIn_0.1s_ease-out]">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-white">Upload Media</h3>
+              <button 
+                onClick={() => setShowUploadModal(false)}
+                className="text-gray-500 hover:text-white transition-colors"
+              >
+                <i className="fa-solid fa-xmark text-lg"></i>
+              </button>
+            </div>
+            
+            <input 
+              type="file" 
+              ref={fileInputRef}
+              accept="image/*,video/*" 
+              onChange={(e) => {
+                handleFileChange(e);
+                setShowUploadModal(false);
+              }} 
+              className="hidden"
+              id="media-upload-modal"
+            />
+            
+            <div className="space-y-3">
+              <label 
+                htmlFor="media-upload-modal"
+                className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-white font-bold py-3 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
+              >
+                <i className="fa-regular fa-image"></i>
+                Upload from Device
+              </label>
+              
+              <div className="flex items-center gap-3 py-3 border-t border-white/5">
+                <input 
+                  type="checkbox"
+                  id="upload-to-explore"
+                  checked={uploadToExplore}
+                  onChange={(e) => setUploadToExplore(e.target.checked)}
+                  className="w-4 h-4 rounded border-white/20 bg-white/5 text-accent focus:ring-accent focus:ring-offset-0"
+                />
+                <label htmlFor="upload-to-explore" className="text-sm text-white cursor-pointer flex-1">
+                  Also upload to Explore/Feed
+                  <p className="text-xs text-gray-500 mt-0.5">Your post will appear in both Community and Explore with a "Community" tag</p>
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

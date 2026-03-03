@@ -11,9 +11,10 @@ interface ProfileDetailsModalProps {
   isOpen: boolean;
   onClose: () => void;
   user: User | null;
+  onOpenPublicProfile?: () => void;
 }
 
-const ProfileDetailsModal: React.FC<ProfileDetailsModalProps> = ({ isOpen, onClose, user }) => {
+const ProfileDetailsModal: React.FC<ProfileDetailsModalProps> = ({ isOpen, onClose, user, onOpenPublicProfile }) => {
   const [activeTab, setActiveTab] = useState<'profile' | 'security'>('profile');
   const [isLoading, setIsLoading] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
@@ -371,6 +372,15 @@ const ProfileDetailsModal: React.FC<ProfileDetailsModalProps> = ({ isOpen, onClo
                                     'Save Profile Changes'
                                 )}
                             </button>
+
+                            {onOpenPublicProfile && (
+                                <button 
+                                    onClick={onOpenPublicProfile}
+                                    className="w-full bg-accent hover:bg-purple-600 text-white font-bold py-3 rounded-xl transition-colors flex items-center justify-center gap-2 mt-3"
+                                >
+                                    <i className="fa-solid fa-globe"></i> Edit Public Profile
+                                </button>
+                            )}
                         </div>
                     </div>
                 </div>

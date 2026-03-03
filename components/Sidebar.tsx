@@ -494,13 +494,15 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
             );
           })}
           
-          <div className="px-4 mt-4 text-[10px] text-gray-600 leading-tight font-medium tracking-wide uppercase">
-            <div className="flex flex-wrap gap-3 mb-3">
+          <div className="px-4 mt-4 text-[10px] text-gray-600 leading-relaxed">
+            <div className="flex flex-wrap gap-2 mb-2">
               <a href="#" className="hover:text-gray-400 transition-colors">Terms</a>
+              <span className="opacity-40">•</span>
               <a href="#" className="hover:text-gray-400 transition-colors">Privacy</a>
+              <span className="opacity-40">•</span>
               <a href="#" className="hover:text-gray-400 transition-colors">Cookies</a>
             </div>
-            <p className="opacity-40">© 2025 POORN INC.</p>
+            <p className="opacity-40">© 2026 POORN INC.</p>
           </div>
         </div>
       </aside>

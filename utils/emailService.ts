@@ -249,7 +249,7 @@ const generateEmailHTML = (code: string): string => {
           <p>Este es un mensaje automático de poorn</p>
           <p>© ${new Date().getFullYear()} poorn. Todos los derechos reservados.</p>
           <p style="margin-top: 20px; color: #555;">
-            ¿Necesitas ayuda? Únete a nuestro <a href="https://discord.gg/r3wDycJ3" style="color: #A855F7; text-decoration: none;">Discord</a>
+            ¿Necesitas ayuda? Únete a nuestro <a href="https://discord.gg/RaXBWkV8xv" style="color: #A855F7; text-decoration: none;">Discord</a>
           </p>
         </div>
       </div>

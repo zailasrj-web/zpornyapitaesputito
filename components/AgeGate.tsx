@@ -125,7 +125,7 @@ const AgeGate: React.FC<AgeGateProps> = ({ onVerify }) => {
                     Our <span onClick={() => setShowParentalControls(true)} className="text-gray-500 cursor-pointer hover:underline hover:text-gray-400 transition-colors">parental controls page</span> explains how you can easily block access to this site.
                 </p>
                 <p className="mt-2 opacity-50">
-                     © 2025 poorn Inc. All rights reserved.
+                     © 2026 poorn Inc. All rights reserved.
                 </p>
             </div>
         </div>

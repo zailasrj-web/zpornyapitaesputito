@@ -10,7 +10,7 @@ export const SIDEBAR_ITEMS: SidebarItem[] = [
 
 export const BOTTOM_NAV_ITEMS: SidebarItem[] = [
   { label: 'Profile', iconClass: 'fa-regular fa-user' },
-  { label: 'Discord', iconClass: 'fa-brands fa-discord', link: 'https://discord.gg/r3wDycJ3' },
+  { label: 'Discord', iconClass: 'fa-brands fa-discord', link: 'https://discord.gg/RaXBWkV8xv' },
 ];
 
 export const TAGS: Tag[] = [
