@@ -165,7 +165,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
           
           {/* Logo */}
           <div 
-            className="flex items-center gap-3 cursor-pointer flex-1 ml-4" 
+            className="flex items-center gap-1.5 cursor-pointer flex-1 ml-4" 
             onClick={() => {
               onNavigate('home');
               onClose();
@@ -174,28 +174,26 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
              <img 
                src="https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png" 
                alt="poorn Logo" 
-               className="w-8 h-8 object-contain"
+               className="w-11 h-11 object-contain"
              />
-             <div>
-                <span className="text-2xl font-extrabold tracking-tighter text-white block leading-none">
+             <div className="flex flex-col -space-y-1">
+                {/* Owner Badge - Blue */}
+                {isOwner && (
+                    <span className="text-[7px] font-bold uppercase tracking-wider px-1 py-[1px] rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 inline-flex items-center gap-0.5 w-fit">
+                        <i className="fa-solid fa-crown text-[6px]"></i>
+                        OWNER
+                    </span>
+                )}
+                {/* Admin Badge - Red */}
+                {!isOwner && isAdmin && (
+                    <span className="text-[7px] font-bold uppercase tracking-wider px-1 py-[1px] rounded bg-red-500/20 text-red-400 border border-red-500/30 inline-flex items-center gap-0.5 w-fit">
+                        <i className="fa-solid fa-shield-halved text-[6px]"></i>
+                        ADMIN
+                    </span>
+                )}
+                <span className="text-2xl font-extrabold tracking-tighter text-white leading-tight">
                     poorn
                 </span>
-                {/* Owner Badge - Blue Fire */}
-                {isOwner && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 border border-blue-500/30 flex items-center gap-1">
-                        <i className="fa-solid fa-crown text-[8px]"></i>
-                        OWNER
-                        <i className="fa-solid fa-fire text-[8px] animate-pulse"></i>
-                    </span>
-                )}
-                {/* Admin Badge - Red Fire */}
-                {!isOwner && isAdmin && (
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded bg-red-500/20 text-red-400 border border-red-500/30 flex items-center gap-1">
-                        <i className="fa-solid fa-shield-halved text-[8px]"></i>
-                        ADMIN
-                        <i className="fa-solid fa-fire text-orange-500 text-[8px] animate-pulse"></i>
-                    </span>
-                )}
                 {/* User Tier Badge */}
                 {userTier !== 'Free' && !isAdmin && !isOwner && (
                     <span className={`text-[9px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-md inline-flex items-center justify-center gap-1 ${

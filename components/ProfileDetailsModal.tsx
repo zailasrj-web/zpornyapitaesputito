@@ -38,6 +38,7 @@ const ProfileDetailsModal: React.FC<ProfileDetailsModalProps> = ({ isOpen, onClo
   const [email, setEmail] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [is2FAEnabled, setIs2FAEnabled] = useState(false);
 
   // Load user data when modal opens
   useEffect(() => {
@@ -144,13 +145,14 @@ const ProfileDetailsModal: React.FC<ProfileDetailsModalProps> = ({ isOpen, onClo
               await updateProfile(user, { displayName: displayName });
           }
 
-          // 4. Update Firestore
+          // 4. Update Firestore with all user data
           await setDoc(doc(db, "users", user.uid), {
               username: username,
               displayName: displayName,
               bio: bio,
               photoURL: finalPhotoURL, // Ensure Firestore is in sync with Auth
               coverPhotoURL: finalCoverURL,
+              email: user.email, // Keep email in sync
               updatedAt: new Date()
           }, { merge: true });
 
@@ -159,6 +161,14 @@ const ProfileDetailsModal: React.FC<ProfileDetailsModalProps> = ({ isOpen, onClo
           // Clear file selections after successful save
           setAvatarFile(null);
           setCoverFile(null);
+          
+          // Reload user to reflect changes immediately
+          await auth.currentUser?.reload();
+          
+          // Close modal after 1.5 seconds to show success message
+          setTimeout(() => {
+              onClose();
+          }, 1500);
 
       } catch (error: any) {
           console.error(error);
@@ -175,8 +185,11 @@ const ProfileDetailsModal: React.FC<ProfileDetailsModalProps> = ({ isOpen, onClo
       setSuccessMsg('');
 
       try {
+          let emailChanged = false;
+          
           if (email !== user.email) {
               await updateEmail(user, email);
+              emailChanged = true;
           }
 
           if (newPassword) {
@@ -185,8 +198,11 @@ const ProfileDetailsModal: React.FC<ProfileDetailsModalProps> = ({ isOpen, onClo
               await updatePassword(user, newPassword);
           }
 
+          // Update Firestore with security settings and email if changed
           await setDoc(doc(db, "users", user.uid), {
-              is2FAEnabled: is2FAEnabled
+              is2FAEnabled: is2FAEnabled,
+              ...(emailChanged && { email: email }), // Update email in Firestore if changed
+              updatedAt: new Date()
           }, { merge: true });
 
           setSuccessMsg('Security settings updated!');

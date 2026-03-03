@@ -645,6 +645,19 @@ const App: React.FC = () => {
     window.scrollTo(0, 0);
   };
 
+  const handleLogoClick = () => {
+    // Cerrar todos los modales y vistas que existen
+    setSelectedVideo(null);
+    setIsUpgradeOpen(false);
+    setIsUploadOpen(false);
+    setIsLoginOpen(false);
+    setIsSidebarOpen(false);
+    
+    // Navegar a Explore (home)
+    setCurrentView('home');
+    window.scrollTo(0, 0);
+  };
+
   const toggleSidebar = () => {
     setIsSidebarOpen(!isSidebarOpen);
   };
@@ -1119,6 +1132,7 @@ const App: React.FC = () => {
             onProfileClick={() => navigateTo('profile')}
             isSidebarOpen={isSidebarOpen}
             currentView={currentView}
+            onLogoClick={handleLogoClick}
           />
         )}
         

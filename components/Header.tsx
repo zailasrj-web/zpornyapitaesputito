@@ -10,9 +10,10 @@ interface HeaderProps {
   onProfileClick?: () => void;
   isSidebarOpen?: boolean;
   currentView?: string; // Add currentView prop
+  onLogoClick?: () => void; // Add logo click handler
 }
 
-const Header: React.FC<HeaderProps> = ({ user, onLoginClick, onJoinClick, onMenuClick, onLogout, onProfileClick, isSidebarOpen, currentView }) => {
+const Header: React.FC<HeaderProps> = ({ user, onLoginClick, onJoinClick, onMenuClick, onLogout, onProfileClick, isSidebarOpen, currentView, onLogoClick }) => {
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Get username or part of email or fallback
@@ -39,16 +40,19 @@ const Header: React.FC<HeaderProps> = ({ user, onLoginClick, onJoinClick, onMenu
 
       {/* Logo (Centered on desktop, left-aligned on mobile) - Hidden in feed view */}
       {currentView !== 'feed' && (
-        <div className="flex items-center gap-1 md:absolute md:left-1/2 md:transform md:-translate-x-1/2 flex-1 md:flex-none justify-center md:justify-start ml-3 md:ml-0">
+        <button 
+          onClick={onLogoClick}
+          className="flex items-center gap-0.5 md:absolute md:left-1/2 md:transform md:-translate-x-1/2 flex-1 md:flex-none justify-center md:justify-start ml-3 md:ml-0 hover:opacity-80 transition-opacity cursor-pointer"
+        >
              <img 
                src="https://res.cloudinary.com/dbfza2zyk/image/upload/v1768852307/ZZPO_lmy5e2.png" 
                alt="poorn Logo" 
-               className="w-6 h-6 object-contain"
+               className="w-7 h-7 object-contain"
              />
-             <span className="text-xl font-extrabold tracking-tighter text-white">
+             <span className="text-[22px] font-extrabold tracking-tighter text-white">
                 poorn
              </span>
-        </div>
+        </button>
       )}
 
       {/* Right Section: Actions */}

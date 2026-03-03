@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { auth, db } from '../firebase';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface NotificationPreferencesModalProps {
   isOpen: boolean;
@@ -34,19 +36,82 @@ const ToggleRow: React.FC<{
 );
 
 const NotificationPreferencesModal: React.FC<NotificationPreferencesModalProps> = ({ isOpen, onClose }) => {
+  const currentUser = auth.currentUser;
+  
   // State for toggles
   const [settings, setSettings] = useState({
     accountUpdates: true,
-    videoGeneration: true,
     newFollowers: true,
     characterLikes: true,
     coinDonations: true,
     followedUserCharacters: true,
     communityPackPurchases: true,
   });
+  
+  const [isSaving, setIsSaving] = useState(false);
+
+  // Load preferences from Firebase when modal opens
+  useEffect(() => {
+    if (isOpen && currentUser) {
+      loadPreferences();
+    }
+  }, [isOpen, currentUser]);
+
+  const loadPreferences = async () => {
+    if (!currentUser) return;
+    
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      const userDoc = await getDoc(userRef);
+      
+      if (userDoc.exists()) {
+        const data = userDoc.data();
+        if (data.notificationPreferences) {
+          setSettings(prev => ({
+            ...prev,
+            ...data.notificationPreferences
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Error loading notification preferences:', error);
+    }
+  };
+
+  const savePreferences = async () => {
+    if (!currentUser) return;
+    
+    setIsSaving(true);
+    try {
+      const userRef = doc(db, 'users', currentUser.uid);
+      await setDoc(userRef, {
+        notificationPreferences: settings,
+        updatedAt: new Date()
+      }, { merge: true });
+      
+      console.log('✅ Notification preferences saved');
+    } catch (error) {
+      console.error('Error saving notification preferences:', error);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const toggle = (key: keyof typeof settings) => {
-    setSettings(prev => ({ ...prev, [key]: !prev[key] }));
+    setSettings(prev => {
+      const newSettings = { ...prev, [key]: !prev[key] };
+      // Auto-save after toggle
+      setTimeout(() => {
+        if (currentUser) {
+          const userRef = doc(db, 'users', currentUser.uid);
+          setDoc(userRef, {
+            notificationPreferences: newSettings,
+            updatedAt: new Date()
+          }, { merge: true }).catch(console.error);
+        }
+      }, 100);
+      return newSettings;
+    });
   };
 
   if (!isOpen) return null;
@@ -94,22 +159,8 @@ const NotificationPreferencesModal: React.FC<NotificationPreferencesModalProps> 
           <div>
             <h3 className="text-sm font-semibold text-white mb-1">In-App</h3>
             
-            {/* Sub-section: Activity */}
-            <div className="mt-3">
-                <span className="text-xs text-gray-400 pl-1 mb-2 block">Activity</span>
-                <div className="bg-[#151515] border border-white/5 rounded-xl px-4">
-                  <ToggleRow 
-                    label="Video Generation" 
-                    description="Notify when a video finishes generating"
-                    checked={settings.videoGeneration}
-                    onChange={() => toggle('videoGeneration')}
-                    isLast={true}
-                  />
-                </div>
-            </div>
-
             {/* Sub-section: Social */}
-            <div className="mt-6">
+            <div className="mt-3">
                 <span className="text-xs text-gray-400 pl-1 mb-2 block">Social</span>
                 <div className="bg-[#151515] border border-white/5 rounded-xl px-4">
                   <ToggleRow 
