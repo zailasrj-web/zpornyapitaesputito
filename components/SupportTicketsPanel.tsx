@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { User } from 'firebase/auth';
 import { db } from '../firebase';
 import { 
   collection, 
@@ -39,7 +38,7 @@ interface Message {
 }
 
 interface SupportTicketsPanelProps {
-  currentUser: User;
+  currentUser: string | null; // Email del admin actual
   isAdmin: boolean;
 }
 
@@ -61,7 +60,7 @@ const SupportTicketsPanel: React.FC<SupportTicketsPanelProps> = ({ currentUser, 
     scrollToBottom();
   }, [messages]);
 
-  // Load tickets
+  // Load tickets (TODOS los tickets para admin, incluyendo cerrados)
   useEffect(() => {
     let q;
     if (filter === 'all') {
@@ -110,22 +109,25 @@ const SupportTicketsPanel: React.FC<SupportTicketsPanelProps> = ({ currentUser, 
   }, [selectedTicket]);
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedTicket) return;
+    if (!newMessage.trim() || !selectedTicket || !currentUser) return;
 
     try {
+      // Add message to ticket
       await addDoc(collection(db, 'supportTickets', selectedTicket.id, 'messages'), {
         text: newMessage,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || 'Admin',
-        senderAvatar: currentUser.photoURL || '',
+        senderId: 'admin_' + currentUser, // Use admin email as ID
+        senderName: currentUser.split('@')[0] || 'Admin',
+        senderAvatar: '',
         timestamp: serverTimestamp(),
-        isAdmin: true
+        isAdmin: true,
+        email: currentUser
       });
 
-      // Update ticket last message time
+      // Update ticket last message time and status
       await updateDoc(doc(db, 'supportTickets', selectedTicket.id), {
         lastMessageAt: serverTimestamp(),
-        unreadByAdmin: false
+        unreadByAdmin: false,
+        status: 'open' // Keep ticket open when admin responds
       });
 
       setNewMessage('');
@@ -141,7 +143,7 @@ const SupportTicketsPanel: React.FC<SupportTicketsPanelProps> = ({ currentUser, 
       await updateDoc(doc(db, 'supportTickets', ticketId), {
         status: 'closed',
         closedAt: serverTimestamp(),
-        closedBy: currentUser.uid
+        closedBy: currentUser || 'admin'
       });
       setSelectedTicket(null);
     } catch (error) {

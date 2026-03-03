@@ -7,11 +7,31 @@ interface EmailOptions {
 }
 
 export const sendVerificationEmail = async ({ to, code }: EmailOptions): Promise<boolean> => {
+  // Check if Firebase Function URL is configured
+  const functionUrl = import.meta.env.VITE_FIREBASE_FUNCTION_URL;
+  
+  // If no function URL is configured, use development mode (show code in console)
+  if (!functionUrl || functionUrl === 'YOUR_FUNCTION_URL_HERE') {
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('🔐 CÓDIGO DE VERIFICACIÓN (Modo Desarrollo)');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log(`📧 Para: ${to}`);
+    console.log(`🔢 Código: ${code}`);
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    console.log('⚠️  Modo desarrollo: Copia este código para verificar');
+    console.log('💡 Configura VITE_FIREBASE_FUNCTION_URL en .env para enviar emails reales');
+    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    // Show alert in browser for easier access
+    setTimeout(() => {
+      alert(`🔐 CÓDIGO DE VERIFICACIÓN (Modo Desarrollo)\n\nPara: ${to}\nCódigo: ${code}\n\nCopia este código para verificar tu cuenta.`);
+    }, 500);
+    
+    return true;
+  }
+  
   try {
     // Call Firebase Cloud Function
-    const functionUrl = import.meta.env.VITE_FIREBASE_FUNCTION_URL || 
-                       'http://127.0.0.1:5001/YOUR_PROJECT_ID/us-central1/send2FAEmail';
-    
     const response = await fetch(functionUrl, {
       method: 'POST',
       headers: {
@@ -26,13 +46,15 @@ export const sendVerificationEmail = async ({ to, code }: EmailOptions): Promise
       
       // Fallback: Show code in console for development
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('🔐 CÓDIGO DE VERIFICACIÓN (Modo Desarrollo)');
+      console.log('🔐 CÓDIGO DE VERIFICACIÓN (Fallback)');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log(`📧 Para: ${to}`);
       console.log(`🔢 Código: ${code}`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('⚠️  Configura Firebase Functions para enviar emails reales');
+      console.log('⚠️  Error al enviar email - Usando fallback');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      
+      alert(`🔐 CÓDIGO DE VERIFICACIÓN (Fallback)\n\nPara: ${to}\nCódigo: ${code}\n\nHubo un error al enviar el email. Usa este código.`);
       return true;
     }
 
@@ -44,13 +66,15 @@ export const sendVerificationEmail = async ({ to, code }: EmailOptions): Promise
     
     // Fallback: Show code in console
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🔐 CÓDIGO DE VERIFICACIÓN (Modo Desarrollo)');
+    console.log('🔐 CÓDIGO DE VERIFICACIÓN (Fallback)');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
     console.log(`📧 Para: ${to}`);
     console.log(`🔢 Código: ${code}`);
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('⚠️  Error de conexión - Usando modo desarrollo');
+    console.log('⚠️  Error de conexión - Usando fallback');
     console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    
+    alert(`🔐 CÓDIGO DE VERIFICACIÓN (Fallback)\n\nPara: ${to}\nCódigo: ${code}\n\nError de conexión. Usa este código.`);
     return true;
   }
 };

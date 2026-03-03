@@ -26,8 +26,8 @@ interface UserSearchResult {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onClose, onUpgrade, isAdmin, userTier = 'Free', onViewProfile, userEmail, onLogin, isGlobalBanned = false }) => {
-  const OWNER_EMAIL = 'zailasrj@gmail.com';
-  const isOwner = userEmail === OWNER_EMAIL;
+  const OWNER_EMAILS = ['zailasrj@gmail.com', 'yapadesing.contacto@gmail.com'];
+  const isOwner = userEmail ? OWNER_EMAILS.includes(userEmail) : false;
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);

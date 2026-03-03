@@ -336,6 +336,9 @@ const TwoFactorModal: React.FC<TwoFactorModalProps> = ({ isOpen, onClose }) => {
               {successMessage && (
                 <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-3 text-center">
                   <p className="text-xs text-green-400">{successMessage}</p>
+                  <p className="text-[10px] text-gray-400 mt-1">
+                    💡 Modo desarrollo: Revisa la consola del navegador (F12) o la alerta emergente para ver el código
+                  </p>
                 </div>
               )}
 
@@ -358,7 +361,8 @@ const TwoFactorModal: React.FC<TwoFactorModalProps> = ({ isOpen, onClose }) => {
                     autoFocus
                   />
                   <p className="text-[10px] text-gray-500 text-center mt-2">
-                    Revisa tu bandeja de entrada y spam
+                    Revisa tu bandeja de entrada y spam<br/>
+                    💡 Modo desarrollo: Revisa la consola (F12) o alerta emergente
                   </p>
                 </div>
 

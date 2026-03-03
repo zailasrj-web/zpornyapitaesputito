@@ -507,16 +507,19 @@ const App: React.FC = () => {
         const data = docSnap.data();
         let adminsList = data.emails || [];
         
-        // Always ensure owner is in the list
-        if (!adminsList.includes('zailasrj@gmail.com')) {
-          adminsList = ['zailasrj@gmail.com', ...adminsList];
-        }
+        // Always ensure both owners are in the list
+        const OWNER_EMAILS = ['zailasrj@gmail.com', 'yapadesing.contacto@gmail.com'];
+        OWNER_EMAILS.forEach(ownerEmail => {
+          if (!adminsList.includes(ownerEmail)) {
+            adminsList = [ownerEmail, ...adminsList];
+          }
+        });
         
         setAdminEmails(adminsList);
         console.log("✅ Admins updated from Firebase (real-time):", adminsList);
       } else {
-        // Initialize with default admins
-        const defaultAdmins = ['zailasrj@gmail.com'];
+        // Initialize with default admins (both owners)
+        const defaultAdmins = ['zailasrj@gmail.com', 'yapadesing.contacto@gmail.com'];
         console.log("⚠️ No admin document found, creating with defaults:", defaultAdmins);
         try {
           await setDoc(adminsRef, {
@@ -685,8 +688,9 @@ const App: React.FC = () => {
   const handleRemoveAdmin = async (email: string) => {
     console.log("🔧 Removing admin:", email);
     
-    // Prevent removing owner
-    if (email === 'zailasrj@gmail.com') {
+    // Prevent removing owners
+    const OWNER_EMAILS = ['zailasrj@gmail.com', 'yapadesing.contacto@gmail.com'];
+    if (OWNER_EMAILS.includes(email)) {
       console.log("❌ Cannot remove owner");
       setToast({ message: 'Cannot remove the owner', type: 'error' });
       return;

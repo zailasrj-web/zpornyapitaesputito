@@ -74,8 +74,8 @@ interface ChatViewProps {
 }
 
 const GENERAL_CHAT_ID = "general_community_chat";
-const OWNER_EMAIL = "zailasrj@gmail.com";
-const ADMIN_EMAILS = ["zailasrj@gmail.com", "demo@zpoom.ai", "admin@zpoom.com", "eliasra.hdez@gmail.com", "yapadesing.contacto@gmail.com"]; 
+const OWNER_EMAILS = ["zailasrj@gmail.com", "yapadesing.contacto@gmail.com"];
+const ADMIN_EMAILS = ["zailasrj@gmail.com", "yapadesing.contacto@gmail.com", "demo@zpoom.ai", "admin@zpoom.com", "eliasra.hdez@gmail.com"]; 
 const PROTECTED_NAMES = ["Zailas", "Admin", "Owner", "Community Chat", "Zpoom Team"];
 
 // --- SIDEBAR ITEM COMPONENT FOR TYPING & ONLINE LOGIC ---
@@ -400,8 +400,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
 
   const prevInboxRef = useRef<Contact[]>([]);
   
-  const isAdminOrOwner = currentUser ? (ADMIN_EMAILS.includes(currentUser.email || '') || currentUser.email === OWNER_EMAIL) : false;
-  const isOwner = currentUser?.email === OWNER_EMAIL;
+  const isAdminOrOwner = currentUser ? (ADMIN_EMAILS.includes(currentUser.email || '') || OWNER_EMAILS.includes(currentUser.email || '')) : false;
+  const isOwner = currentUser?.email ? OWNER_EMAILS.includes(currentUser.email) : false;
 
   // Helper functions for modals
   const showConfirm = (config: {
@@ -1193,12 +1193,17 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
     return () => unsubscribe();
   }, [isAdminOrOwner]);
 
-  // Load Support Tickets (for admins)
+  // Load Support Tickets (for admins) - SOLO TICKETS ABIERTOS en el chat
   useEffect(() => {
     if (!isAdminOrOwner) return;
 
     const ticketsRef = collection(db, 'supportTickets');
-    const q = query(ticketsRef, orderBy('createdAt', 'desc'));
+    // Solo mostrar tickets abiertos en el chat normal
+    const q = query(
+      ticketsRef, 
+      where('status', '==', 'open'),
+      orderBy('createdAt', 'desc')
+    );
     
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const tickets: Contact[] = [];
@@ -1215,6 +1220,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           userPhotoURL: data.userPhotoURL,
           userId: data.userId,
           userEmail: data.userEmail,
+          status: data.status,
           allFields: Object.keys(data)
         });
         
@@ -1225,7 +1231,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
           status: 'online',
           lastMessage: data.message?.substring(0, 50) || 'Ticket de soporte',
           time: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' }) : 'Ahora',
-          unread: data.status === 'open' ? 1 : 0,
+          unread: 1, // Siempre mostrar como no leído si está abierto
           isSupportTicket: true,
           ticketStatus: data.status || 'open',
           userId: userId // Add userId to Contact
@@ -1995,8 +2001,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                   
                   // Check if target is admin or owner - prevent banning
                   const targetEmail = targetUserData.email || '';
-                  if (ADMIN_EMAILS.includes(targetEmail) || targetEmail === OWNER_EMAIL) {
-                      const isOwner = targetEmail === OWNER_EMAIL;
+                  if (ADMIN_EMAILS.includes(targetEmail) || OWNER_EMAILS.includes(targetEmail)) {
+                      const isOwner = OWNER_EMAILS.includes(targetEmail);
                       const warningMsg = isOwner 
                           ? "👑 ¿En serio crees que eres igual que yo? Soy el OWNER de esta plataforma. Tu intento de baneo ha sido registrado." 
                           : "🛡️ ¿Intentas banear a un ADMINISTRADOR? No tienes ese poder aquí. Conoce tu lugar.";
@@ -2045,8 +2051,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                       const targetEmail = targetUserData.email || '';
                       
                       // Check if target is admin or owner - prevent banning
-                      if (ADMIN_EMAILS.includes(targetEmail) || targetEmail === OWNER_EMAIL) {
-                          const isOwner = targetEmail === OWNER_EMAIL;
+                      if (ADMIN_EMAILS.includes(targetEmail) || OWNER_EMAILS.includes(targetEmail)) {
+                          const isOwner = OWNER_EMAILS.includes(targetEmail);
                           const warningMsg = isOwner 
                               ? "👑 ¿En serio crees que eres igual que yo? Soy el OWNER de esta plataforma. Tu intento de baneo ha sido registrado." 
                               : "🛡️ ¿Intentas banear a un ADMINISTRADOR? No tienes ese poder aquí. Conoce tu lugar.";
@@ -3101,8 +3107,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                   const targetEmail = targetUserData.email || '';
                   
                   // Prevent deleting chats with admins or owner
-                  if (ADMIN_EMAILS.includes(targetEmail) || targetEmail === OWNER_EMAIL) {
-                      const isOwner = targetEmail === OWNER_EMAIL;
+                  if (ADMIN_EMAILS.includes(targetEmail) || OWNER_EMAILS.includes(targetEmail)) {
+                      const isOwner = OWNER_EMAILS.includes(targetEmail);
                       const newAttempts = warningAttempts + 1;
                       setWarningAttempts(newAttempts);
                       
@@ -3204,8 +3210,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                   const targetEmail = targetUserData.email || '';
                   
                   // Prevent blocking admins or owner
-                  if (ADMIN_EMAILS.includes(targetEmail) || targetEmail === OWNER_EMAIL) {
-                      const isOwner = targetEmail === OWNER_EMAIL;
+                  if (ADMIN_EMAILS.includes(targetEmail) || OWNER_EMAILS.includes(targetEmail)) {
+                      const isOwner = OWNER_EMAILS.includes(targetEmail);
                       const newAttempts = warningAttempts + 1;
                       setWarningAttempts(newAttempts);
                       
@@ -3876,8 +3882,8 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                  const isMe = msg.senderUid === currentUser?.uid;
                  const isSystem = msg.type === 'system';
                  const isAdminLog = msg.type === 'admin_log';
-                 const isCurrentUserAdmin = ADMIN_EMAILS.includes(msg.email || '') || msg.email === OWNER_EMAIL;
-                 const isOwner = msg.email === OWNER_EMAIL;
+                 const isCurrentUserAdmin = ADMIN_EMAILS.includes(msg.email || '') || OWNER_EMAILS.includes(msg.email || '');
+                 const isOwner = msg.email ? OWNER_EMAILS.includes(msg.email) : false;
                  
                  const showHeader = index === 0 || messages[index - 1].senderUid !== msg.senderUid || (msg.createdAt && messages[index - 1].createdAt && (msg.createdAt.toMillis() - messages[index - 1].createdAt.toMillis() > 300000));
 
@@ -4625,7 +4631,7 @@ const ChatView: React.FC<ChatViewProps> = ({ currentUser, initialTargetId }) => 
                 <div className="space-y-2 max-h-64 overflow-y-auto">
                   {/* Real Users from Firebase */}
                   {onlineUsers.map((user) => {
-                    const isUserOwner = user.email === OWNER_EMAIL;
+                    const isUserOwner = OWNER_EMAILS.includes(user.email);
                     const isUserAdmin = ADMIN_EMAILS.includes(user.email) && !isUserOwner;
                     const isCurrentUser = user.uid === currentUser?.uid;
                     

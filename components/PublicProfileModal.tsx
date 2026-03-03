@@ -24,9 +24,9 @@ interface UserProfileData {
   rank?: number;
 }
 
-const OWNER_EMAIL = 'zailasrj@gmail.com';
-const OWNER_USERNAME = 'zailasrj';
-const ADMIN_EMAILS = ['demo@poorn.ai', 'admin@poorn.com', 'eliasra.hdez@gmail.com']; // Add other admin emails here
+const OWNER_EMAILS = ['zailasrj@gmail.com', 'yapadesing.contacto@gmail.com'];
+const OWNER_USERNAMES = ['zailasrj', 'yapadesing'];
+const ADMIN_EMAILS = ['zailasrj@gmail.com', 'yapadesing.contacto@gmail.com', 'demo@poorn.ai', 'admin@poorn.com', 'eliasra.hdez@gmail.com']; // Add other admin emails here
 
 const PublicProfileModal: React.FC<PublicProfileModalProps> = ({ isOpen, onClose, userId, onMessage }) => {
   const [userData, setUserData] = useState<UserProfileData | null>(null);
@@ -182,7 +182,7 @@ const PublicProfileModal: React.FC<PublicProfileModalProps> = ({ isOpen, onClose
 
   if (!isOpen) return null;
 
-  const isOwner = userData?.email === OWNER_EMAIL || userData?.username === OWNER_USERNAME;
+  const isOwner = (userData?.email && OWNER_EMAILS.includes(userData.email)) || (userData?.username && OWNER_USERNAMES.includes(userData.username));
   const isAdmin = userData?.email && ADMIN_EMAILS.includes(userData.email);
 
   return (

@@ -77,8 +77,8 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
   currentUserEmail,
   onOpenVideo
 }) => {
-  const OWNER_EMAIL = 'zailasrj@gmail.com';
-  const isOwner = currentUserEmail === OWNER_EMAIL;
+  const OWNER_EMAILS = ['zailasrj@gmail.com', 'yapadesing.contacto@gmail.com'];
+  const isOwner = currentUserEmail ? OWNER_EMAILS.includes(currentUserEmail) : false;
   
   const [activeTab, setActiveTab] = useState<'dashboard' | 'users' | 'moderation' | 'content' | 'settings' | 'logs' | 'support'>('dashboard');
   const [newAdminEmail, setNewAdminEmail] = useState('');
@@ -864,25 +864,37 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                                         Active Admins ({admins.length})
                                     </h4>
                                     <div className="space-y-2">
-                                        {admins.map(admin => (
-                                            <div key={admin} className="flex justify-between items-center text-sm p-2 bg-white/5 rounded-lg">
-                                                <span className="text-gray-300 truncate flex-1">{admin}</span>
-                                                {admin !== currentUserEmail && admin !== 'zailasrj@gmail.com' && isOwner && (
-                                                    <button 
-                                                        onClick={() => {
-                                                            console.log("🗑️ Remove button clicked for:", admin);
-                                                            onRemoveAdmin(admin);
-                                                        }} 
-                                                        className="text-red-400 hover:text-red-300 text-xs font-bold ml-2"
-                                                    >
-                                                        Remove
-                                                    </button>
-                                                )}
-                                                {admin === 'zailasrj@gmail.com' && (
-                                                    <span className="text-blue-400 text-xs ml-2">👑 Owner</span>
-                                                )}
-                                            </div>
-                                        ))}
+                                        {admins
+                                            .sort((a, b) => {
+                                                // Owners primero
+                                                const aIsOwner = OWNER_EMAILS.includes(a);
+                                                const bIsOwner = OWNER_EMAILS.includes(b);
+                                                if (aIsOwner && !bIsOwner) return -1;
+                                                if (!aIsOwner && bIsOwner) return 1;
+                                                return 0;
+                                            })
+                                            .map(admin => {
+                                                const isOwnerEmail = OWNER_EMAILS.includes(admin);
+                                                return (
+                                                    <div key={admin} className="flex justify-between items-center text-sm p-2 bg-white/5 rounded-lg">
+                                                        <span className="text-gray-300 truncate flex-1">{admin}</span>
+                                                        {admin !== currentUserEmail && !isOwnerEmail && isOwner && (
+                                                            <button 
+                                                                onClick={() => {
+                                                                    console.log("🗑️ Remove button clicked for:", admin);
+                                                                    onRemoveAdmin(admin);
+                                                                }} 
+                                                                className="text-red-400 hover:text-red-300 text-xs font-bold ml-2"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        )}
+                                                        {isOwnerEmail && (
+                                                            <span className="text-blue-400 text-xs ml-2">👑 Owner</span>
+                                                        )}
+                                                    </div>
+                                                );
+                                            })}
                                     </div>
                                 </div>
                             </div>
@@ -909,7 +921,17 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                                         </thead>
                                         <tbody className="divide-y divide-white/5 text-sm">
                                             {filteredUsers.filter(u => admins.includes(u.email)).length > 0 ? (
-                                                filteredUsers.filter(u => admins.includes(u.email)).map(user => (
+                                                filteredUsers
+                                                    .filter(u => admins.includes(u.email))
+                                                    .sort((a, b) => {
+                                                        // Owners first
+                                                        const aIsOwner = OWNER_EMAILS.includes(a.email);
+                                                        const bIsOwner = OWNER_EMAILS.includes(b.email);
+                                                        if (aIsOwner && !bIsOwner) return -1;
+                                                        if (!aIsOwner && bIsOwner) return 1;
+                                                        return 0;
+                                                    })
+                                                    .map(user => (
                                                     <tr key={user.id} className="hover:bg-white/5">
                                                         <td className="p-4">
                                                             <div className="flex items-center gap-2">
@@ -917,7 +939,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({
                                                                     <div className="font-bold text-white">{user.displayName}</div>
                                                                     <div className="text-xs text-gray-500">{user.email}</div>
                                                                 </div>
-                                                                {user.email === OWNER_EMAIL && (
+                                                                {OWNER_EMAILS.includes(user.email) && (
                                                                     <span className="text-xs px-2 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 font-bold">
                                                                         👑 OWNER
                                                                     </span>
