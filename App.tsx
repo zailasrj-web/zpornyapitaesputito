@@ -408,6 +408,18 @@ const App: React.FC = () => {
                 .map(async (docSnapshot) => {
                     const data = docSnapshot.data();
                     
+                    // Migrate videos without tags to "General" category
+                    if (!data.tags || data.tags.length === 0) {
+                        try {
+                            await updateDoc(doc(db, "posts", docSnapshot.id), {
+                                tags: ['general']
+                            });
+                            console.log(`✅ Migrated video ${docSnapshot.id} to General category`);
+                        } catch (error) {
+                            console.error(`❌ Error migrating video ${docSnapshot.id}:`, error);
+                        }
+                    }
+                    
                     // Count existing comments if commentCount doesn't exist
                     let commentCount = data.commentCount || 0;
                     if (!data.commentCount) {
@@ -440,7 +452,8 @@ const App: React.FC = () => {
                         likes: (data.likes?.length || 0).toString(),
                         views: (data.views || 0).toString(),
                         comments: commentCount,
-                        category: data.tags?.[0] || 'General',
+                        category: data.tags?.[0] || 'general',
+                        tags: data.tags || ['general'],
                         // Map author info
                         authorId: data.userId, // Critical for subscriptions
                         authorName: data.user?.name,

@@ -144,7 +144,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
         className={`fixed inset-0 bg-black/80 backdrop-blur-sm z-[150] md:hidden transition-opacity duration-300 ${
           isOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
         }`}
-        onClick={onClose}
+        onClick={() => { setShowNotifications(false); onClose(); }}
       />
 
       {/* Sidebar Container */}
@@ -157,7 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
         <div className="p-6 flex items-center justify-between">
           {/* Close/Menu Button */}
           <button 
-            onClick={onClose}
+            onClick={() => { setShowNotifications(false); onClose(); }}
             className="w-10 h-10 flex items-center justify-center rounded-full transition-all duration-300 text-white/80 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10"
           >
             <i className="fa-solid fa-times text-xl transition-transform duration-300"></i>
@@ -273,27 +273,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
             {/* Navigation Items */}
             {!isGlobalBanned && (
                 <>
-                    <a 
-                        href="#" 
-                        onClick={(e) => { 
-                            e.preventDefault(); 
-                            if (!userEmail && onLogin) {
-                                onLogin();
-                                onClose();
-                            } else {
-                                onNavigate('create'); 
-                                onClose();
-                            }
-                        }}
-                        className={getNavItemClass(currentView === 'create')}
-                    >
-                        <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
-                            <i className="fa-regular fa-square-plus"></i>
-                        </span>
-                        Create
-                    </a>
-
-                    {/* Notifications Button */}
+                    {/* Notifications Button - Moved above Create */}
                     <button
                         onClick={(e) => { e.preventDefault(); setShowNotifications(!showNotifications); }}
                         className={`w-full ${getNavItemClass(false)} relative`}
@@ -331,7 +311,28 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
 
                     <a 
                         href="#" 
-                        onClick={(e) => { e.preventDefault(); onNavigate('home'); onClose(); }}
+                        onClick={(e) => { 
+                            e.preventDefault(); 
+                            setShowNotifications(false); // Close notifications
+                            if (!userEmail && onLogin) {
+                                onLogin();
+                                onClose();
+                            } else {
+                                onNavigate('create'); 
+                                onClose();
+                            }
+                        }}
+                        className={getNavItemClass(currentView === 'create')}
+                    >
+                        <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
+                            <i className="fa-regular fa-square-plus"></i>
+                        </span>
+                        Create
+                    </a>
+
+                    <a 
+                        href="#" 
+                        onClick={(e) => { e.preventDefault(); setShowNotifications(false); onNavigate('home'); onClose(); }}
                         className={getNavItemClass(currentView === 'home')}
                     >
                         <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
@@ -342,7 +343,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
 
                     <a 
                         href="#" 
-                        onClick={(e) => { e.preventDefault(); onNavigate('chat'); onClose(); }}
+                        onClick={(e) => { e.preventDefault(); setShowNotifications(false); onNavigate('chat'); onClose(); }}
                         className={getNavItemClass(currentView === 'chat')}
                     >
                         <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
@@ -355,6 +356,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
                         href="#" 
                         onClick={(e) => { 
                             e.preventDefault(); 
+                            setShowNotifications(false); // Close notifications
                             if (!userEmail && onLogin) {
                                 onLogin();
                                 onClose();
@@ -368,13 +370,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
                         <span className="w-6 text-center mr-3 text-lg opacity-80 group-hover:opacity-100 transition-opacity">
                             <i className="fa-solid fa-play"></i>
                         </span>
-                        Feed
+                        Z Tok
                     </a>
 
                     <a 
                         href="#" 
                         onClick={(e) => { 
                             e.preventDefault(); 
+                            setShowNotifications(false); // Close notifications
                             if (!userEmail && onLogin) {
                                 onLogin();
                                 onClose();
@@ -399,6 +402,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, onNavigate, isOpen, onCl
                     href="#" 
                     onClick={(e) => { 
                         e.preventDefault(); 
+                        setShowNotifications(false); // Close notifications
                         onNavigate('chat'); 
                         onClose();
                     }}

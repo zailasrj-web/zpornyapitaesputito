@@ -8,6 +8,7 @@ export interface Character {
   comments?: number; // Number of comments
   videoUrl?: string; // Added for uploaded video reference
   category?: string;
+  tags?: string[]; // Array of tags/categories
   description?: string; // Video description
   // Optional author fields for the player
   authorId?: string; // ID of the user who created the content

@@ -11,7 +11,8 @@ interface UploadModalProps {
 }
 
 const CATEGORIES = [
-  "General", "Roleplay", "Anime", "Realistic", "Fantasy", "Cyberpunk"
+  "General", "Group Chats", "MILF", "Teen", "Asian", "Latina", "Blonde", 
+  "Busty", "Submissive", "Dominant", "BDSM", "Romantic", "Athletic"
 ];
 
 // Configuration for Cloudinary

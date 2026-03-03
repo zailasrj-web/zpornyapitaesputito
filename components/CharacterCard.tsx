@@ -195,13 +195,13 @@ const CharacterCard: React.FC<CharacterCardProps> = ({
         </div>
       </div>
 
-      {/* Glassmorphism Content Box */}
-      <div className="absolute bottom-0 inset-x-0 p-2 md:p-3 z-20">
+      {/* Glassmorphism Content Box - Fixed to bottom with margins */}
+      <div className="absolute bottom-2 left-2 right-2 z-20">
         <div className="bg-black/60 md:bg-black/40 backdrop-blur-xl border border-white/10 rounded-lg p-2.5 md:p-3 shadow-lg transition-all duration-300 hover:bg-black/60">
             {/* Header: Title and Author */}
             <div className="flex items-start justify-between gap-2 mb-2 md:mb-2.5">
                 <div className="flex-1 min-w-0">
-                    <h3 className="text-sm md:text-base font-bold text-white tracking-tight leading-snug line-clamp-2">
+                    <h3 className="text-sm md:text-base font-bold text-white tracking-tight leading-tight truncate">
                         {character.name}
                     </h3>
                     {character.authorName && (
